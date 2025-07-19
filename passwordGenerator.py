@@ -1,9 +1,9 @@
 import random
 import string
 
-def generatePasswordString(specialChars, useUppercase, length, exclude_similar=False, exclude_chars="", require_2_upper=True, require_2_digits=True, require_2_special=True):
+def generatePasswordString(specialChars, useUppercase, length, exclude_similar=False, exclude_chars="", minUppercase=0, minDigits=0, minSpecial=0, useDashes=False, dashSpacing=0, requiredText=""):
     """
-    Generates a random password string with specified complexity.
+    generates a random password string with specified complexity.
     """
     
     # Define character sets
@@ -23,7 +23,7 @@ def generatePasswordString(specialChars, useUppercase, length, exclude_similar=F
         digits = ''.join(c for c in digits if c not in exclude_chars)
         specialChars = ''.join(c for c in specialChars if c not in exclude_chars)
 
-    # Base character set
+    # base character set
     characters = lower_case
     if useUppercase:
         characters += upper_case
@@ -31,27 +31,40 @@ def generatePasswordString(specialChars, useUppercase, length, exclude_similar=F
     characters += specialChars
     
     if not characters:
-        return "Error: No characters available"
+        return "error: no characters available"
         
     password_list = []
     guaranteed_chars = []
 
-    # Enforce complexity rules
-    if require_2_upper and useUppercase and len(upper_case) >= 2:
-        guaranteed_chars.extend(random.sample(upper_case, 2))
-    if require_2_digits and len(digits) >= 2:
-        guaranteed_chars.extend(random.sample(digits, 2))
-    if require_2_special and len(specialChars) >= 2:
-        guaranteed_chars.extend(random.sample(specialChars, 2))
+    # enforce complexity rules
+    if minUppercase > 0 and useUppercase and len(upper_case) >= minUppercase:
+        guaranteed_chars.extend(random.sample(upper_case, minUppercase))
+    if minDigits > 0 and len(digits) >= minDigits:
+        guaranteed_chars.extend(random.sample(digits, minDigits))
+    if minSpecial > 0 and len(specialChars) >= minSpecial:
+        guaranteed_chars.extend(random.sample(specialChars, minSpecial))
 
-    # Fill the rest of the password length
-    remaining_length = length - len(guaranteed_chars)
+    # add required text
+    if requiredText:
+        password_list.extend(list(requiredText))
+
+    # fill the rest of the password length
+    remaining_length = length - len(guaranteed_chars) - len(password_list) # account for required text
+    if remaining_length < 0:
+        return "error: length too short for requirements and required text"
+
     if remaining_length > 0:
         password_list.extend(random.choices(characters, k=remaining_length))
     
     password_list.extend(guaranteed_chars)
     
-    # Shuffle the final password list to ensure randomness
+    # shuffle the final password list to ensure randomness
     random.shuffle(password_list)
     
-    return "".join(password_list)
+    final_password = "".join(password_list)
+
+    # add dashes
+    if useDashes and dashSpacing > 0:
+        return '-'.join(final_password[i:i+dashSpacing] for i in range(0, len(final_password), dashSpacing))
+
+    return final_password
