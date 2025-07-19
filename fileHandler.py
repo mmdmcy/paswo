@@ -1,165 +1,102 @@
+import json
+import ast # added for literal_eval
 from encryption import encryptText, decryptText
 
 # function to save passwords in json format as specified
 def savePasswordsToFile(passwordsDictionary, masterPasswordValue):
-    print("saving passwords to passwords.json...")  # debug for saving
+    # create a dictionary to store encrypted passwords
+    encrypted_passwords = {}
+    for site_value, password_data in passwordsDictionary.items():
+        # convert password data (dict) to a json string, then encrypt it
+        # print(f"saving site: {site_value}, data: {password_data}") # debug
+        password_data_str = json.dumps(password_data)
+        encrypted_password_value = encryptText(password_data_str, masterPasswordValue)
+        encrypted_passwords[site_value] = encrypted_password_value
     
-    # step 1: start with opening json file
-    jsonText = ""
-    jsonText = jsonText + "{\n"
-    
-    # step 2: loop through all passwords one by one
-    numberOfPasswords = len(passwordsDictionary)
-    currentPasswordNumber = 0
-    
-    for siteValue in passwordsDictionary:
-        # step 3: get the password data for this site
-        passwordData = passwordsDictionary[siteValue]
-        
-        # step 4: handle both old format (string) and new format (dict)
-        if isinstance(passwordData, dict):
-            # new format with username, email, password
-            passwordDataJson = {
-                'username': passwordData.get('username', ''),
-                'email': passwordData.get('email', ''),
-                'password': passwordData.get('password', '')
-            }
-            # convert to string for encryption
-            passwordValueToEncrypt = str(passwordDataJson)
-        else:
-            # old format - just the password string
-            passwordValueToEncrypt = passwordData
-        
-        # step 5: encrypt the password data
-        encryptedPasswordValue = encryptText(passwordValueToEncrypt, masterPasswordValue)
-        
-        # step 6: make the site name safe for json
-        safeSiteName = ""
-        for characterValue in siteValue:
-            if characterValue == '"':
-                safeSiteName = safeSiteName + '\\"'
-            else:
-                safeSiteName = safeSiteName + characterValue
-        
-        # step 7: add the line to json text
-        jsonText = jsonText + '  "'
-        jsonText = jsonText + safeSiteName
-        jsonText = jsonText + '": "'
-        jsonText = jsonText + encryptedPasswordValue
-        jsonText = jsonText + '"'
-        
-        # step 8: add comma if it's not the last password
-        currentPasswordNumber = currentPasswordNumber + 1
-        if currentPasswordNumber < numberOfPasswords:
-            jsonText = jsonText + ","
-        
-        # step 9: go to next line
-        jsonText = jsonText + "\n"
-    
-    # step 10: close the json file
-    jsonText = jsonText + "}"
-    
-    # step 11: write everything to file
-    fileHandle = open('passwords.json', 'w')
-    fileHandle.write(jsonText)
-    fileHandle.close()
-    print("passwords saved to passwords.json")  # debug for location
+    # write the encrypted dictionary to file as json
+    with open('passwords.json', 'w') as f:
+        json.dump(encrypted_passwords, f, indent=2)
+    return True # indicate success
 
 # function to load passwords from json format
 def loadPasswordsFromFile(masterPasswordValue):
-    print("loading passwords from passwords.json...")  # debug for loading
-    # step 1: create empty dictionary for passwords
-    passwordsDictionary = {}
+    # create empty dictionary for passwords
+    passwords_dictionary = {}
     
-    # step 2: try to open file
+    # try to open file
     try:
-        fileHandle = open('passwords.json', 'r')
+        with open('passwords.json', 'r') as f:
+            encrypted_passwords = json.load(f)
     except FileNotFoundError:
-        print("passwords.json not found - starting with empty password list")  # debug for new file
-        return passwordsDictionary
-    
-    try:
-        jsonContent = fileHandle.read()
-        fileHandle.close()
-        print("file read")  # debug for reading
-        
-        # step 3: clean the json string
-        cleanContent = jsonContent.strip()
-        
-        # step 4: remove { and }
-        if cleanContent.startswith('{'):
-            cleanContent = cleanContent[1:]
-        if cleanContent.endswith('}'):
-            cleanContent = cleanContent[:-1]
-        
-        # step 5: check if there is content
-        if cleanContent.strip() == "":
-            print("empty file found")  # debug for empty
-            return passwordsDictionary
-        
-        # step 6: split entries on commas
-        allEntries = cleanContent.split(',')
-        
-        # step 7: go through each entry
-        for singleEntry in allEntries:
-            # step 7a: clean entry
-            cleanEntry = singleEntry.strip()
+        return passwords_dictionary
+    except json.JSONDecodeError:
+        # if json parsing fails, it might be an empty or malformed file, or old format
+        # try to read as plain text and handle old format if possible
+        try:
+            with open('passwords.json', 'r') as f:
+                content = f.read()
+                if not content.strip(): # handle empty file case after decode error
+                    return passwords_dictionary
+                # for old, custom json format, it was structured like site:encrypted_pass
+                # but the encrypted_pass value itself might be a string representation of a dict
+                # from older versions that used str() instead of json.dumps()
+                # if the JSONDecodeError occurred, it's likely not standard JSON.
+                # for simplicity and safety, if json.load fails, we return empty dict for now
+                # to avoid complex manual parsing of potentially mixed formats.
+                # if persistent old data is expected, more robust parsing is needed here.
+                print("json decode error, returning empty dict. content was:", content) # debug
+                return passwords_dictionary
+        except Exception as e:
+            print(f"error reading file after json decode error: {e}") # debug
+            return passwords_dictionary
+
+    # go through each encrypted entry
+    for site_value, encrypted_password_value in encrypted_passwords.items():
+        try:
+            # decrypt the password value
+            decrypted_value = decryptText(encrypted_password_value, masterPasswordValue)
+            # print(f"decrypted for {site_value}: {decrypted_value}") # debug
             
-            # step 7b: check if there is a colon in it
-            if ':' not in cleanEntry:
-                continue  # skip if no colon
-            
-            # step 7c: find all quotation marks
-            firstQuote = cleanEntry.find('"')
-            secondQuote = cleanEntry.find('"', firstQuote + 1)
-            thirdQuote = cleanEntry.find('"', secondQuote + 1)
-            fourthQuote = cleanEntry.find('"', thirdQuote + 1)
-            
-            # step 7d: check if all quotes are found
-            if firstQuote == -1:
-                continue  # skip if quotes are missing
-            if secondQuote == -1:
-                continue  # skip if quotes are missing
-            if thirdQuote == -1:
-                continue  # skip if quotes are missing
-            if fourthQuote == -1:
-                continue  # skip if quotes are missing
-            
-            # step 7e: extract site name
-            siteValue = cleanEntry[firstQuote + 1:secondQuote]
-            
-            # step 7f: extract encrypted password
-            encryptedPasswordValue = cleanEntry[thirdQuote + 1:fourthQuote]
-            
-            # step 7g: undo quotes in site name
-            siteValue = siteValue.replace('\\"', '"')
-            
-            try:
-                # step 7h: decrypt the password
-                decryptedValue = decryptText(encryptedPasswordValue, masterPasswordValue)
+            # try to parse as new format (dict), fallback to old format (string)
+            parsed_data = decrypted_value
+            for _ in range(10): # try up to 10 unescape/parse attempts
+                if isinstance(parsed_data, dict) and 'password' in parsed_data:
+                    break # successfully parsed as a dict
                 
-                # step 7i: try to parse as new format (dict), fallback to old format (string)
-                if decryptedValue.startswith("{'") or decryptedValue.startswith('{"'):
-                    # convert string back to dictionary
-                    passwordData = eval(decryptedValue)
-                    if isinstance(passwordData, dict) and 'password' in passwordData:
-                        # new format - store as dictionary
-                        passwordsDictionary[siteValue] = passwordData
-                    else:
-                        # old format - store as string
-                        passwordsDictionary[siteValue] = decryptedValue
-                else:
-                    # old format - store as string
-                    passwordsDictionary[siteValue] = decryptedValue
-                
-                print(f"password loaded for: {siteValue}")  # debug for entry
-            except Exception as e:
-                print(f"Error decrypting password for {siteValue}: {str(e)}")
-                continue
+                try:
+                    # first, try to load as json directly
+                    new_parsed_data = json.loads(parsed_data)
+                    parsed_data = new_parsed_data
+                except json.JSONDecodeError:
+                    # if json fails, try unescaping and then literal_eval
+                    try:
+                        temp_value = parsed_data.encode().decode('unicode_escape')
+                        # after unescaping, try json again
+                        new_parsed_data = json.loads(temp_value)
+                        parsed_data = new_parsed_data
+                    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+                        # if json still fails, or unescaping itself causes an error, try literal_eval
+                        try:
+                            # before literal_eval, remove any outer quotes if they exist
+                            if temp_value.startswith(('"', "'")) and temp_value.endswith(('"', "'")):
+                                temp_value = temp_value[1:-1]
+                            new_parsed_data = ast.literal_eval(temp_value)
+                            parsed_data = new_parsed_data
+                        except (ValueError, SyntaxError):
+                            # if all else fails, break the loop and keep the current parsed_data
+                            break
+                except Exception: # catch any other unexpected errors during parsing
+                    break
+
+            if isinstance(parsed_data, dict) and 'password' in parsed_data:
+                passwords_dictionary[site_value] = parsed_data
+            else:
+                # if it's a valid json but not a dict with 'password', or still a string after attempts,
+                # store the original decrypted string or the closest parsed value.
+                passwords_dictionary[site_value] = parsed_data if isinstance(parsed_data, str) else decrypted_value
+        except Exception as e:
+            # print(f"decryption failed for {site_value}: {e}") # debug
+            continue # skip if decryption fails
     
-    except Exception as e:
-        print(f"Error loading passwords: {str(e)}")  # debug for error
-        raise  # Re-raise the exception to be handled by the caller
-    
-    # step 8: return the dictionary
-    return passwordsDictionary
+    # return the dictionary
+    return passwords_dictionary

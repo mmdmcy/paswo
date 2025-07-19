@@ -12,20 +12,24 @@ A secure, offline password manager built in Python with Tkinter GUI. This applic
 - **Master Password Protection**: Secure your password vault with a master password using SHA-256 hashing
 - **Custom Encryption**: Implements a custom encryption algorithm inspired by AES principles
 - **Local Storage**: All data stored locally in encrypted JSON files
-- **User-Friendly Interface**: Clean, intuitive GUI built with Tkinter
+- **User-Friendly Interface**: Clean, intuitive GUI built with Tkinter, designed for quick loading and friendly user experience.
 
 ### Password Management
-- **Store Website Credentials**: Save website name, username, email, and password
-- **Edit Existing Entries**: Modify stored credentials easily
-- **Delete Entries**: Remove unwanted password entries
-- **Clear Display**: Well-organized list showing all stored information
+- **Store Website Credentials**: Save website name, username, email, and password. No length restrictions or pop-up warnings.
+- **Edit Existing Entries**: Easily modify stored credentials directly inline within the password list. Click the pencil icon next to a field to edit, and press Enter to save changes.
+- **Copy Credentials**: Quickly copy website, username, email, or password to clipboard using dedicated copy icons.
+- **Delete Entries**: Remove unwanted password entries without confirmation pop-ups.
+- **Clear Display**: Well-organized list showing all stored information.
+- **Always Visible Add Entry**: The "Add Entry" button remains visible regardless of advanced settings menu state.
 
 ### Password Generation
-- **Customizable Length**: Generate passwords from 1-99 characters
-- **Special Characters**: Multiple special character options (!, @, #, $, %, ^, &, *, +, €, ?)
-- **Uppercase Support**: Option to include uppercase letters
-- **Required Text**: Include specific text requirements in generated passwords
-- **Strength Indicator**: Real-time password strength analysis
+- **Customizable Length**: Generate passwords from 1-99 characters, with no minimum length restrictions.
+- **Special Characters**: Multiple special character options (!, @, #, $, %, ^, &, *, +, €, ?) with a "Toggle All" option.
+- **Uppercase Support**: Option to include uppercase letters.
+- **Required Text**: Include specific text requirements in generated passwords.
+- **Exclude Characters**: Specify characters to exclude from generated passwords.
+- **Add Dashes**: Option to add dashes at specified intervals.
+- **Exclude Similar Chars**: Option to exclude similar characters (I, l, 1, O, 0).
 
 ### Security Features
 - **Master Password Authentication**: SHA-256 hashed master password protection
@@ -78,24 +82,30 @@ python guiInterface.py
 1. Enter the website name (required)
 2. Optionally add username and email
 3. Either generate a secure password or enter your own
-4. Click "Add to List" to save
+4. Click "Add Entry" to save
 
 ### Password Generation
-1. Select desired special characters (all enabled by default)
-2. Choose to include uppercase letters (enabled by default)
-3. Set password length (1-99 characters)
-4. Optionally add required text
-5. Click "Generate Password"
+1. Use the various options to customize your password:
+   - **Length**: Set the desired length (no minimum).
+   - **Special characters**: Select specific characters or use "Toggle All".
+   - **Uppercase**: Include or exclude uppercase letters.
+   - **Dashes**: Add dashes at regular intervals.
+   - **Exclude similar chars**: Prevent similar characters (I, l, 1, O, 0).
+   - **Required text**: Include specific text in the password.
+   - **Exclude chars**: Specify characters to avoid.
+2. Click "Generate" to create the password.
 
 ### Managing Stored Passwords
-- **View**: All passwords are displayed in the right panel
-- **Edit**: Select an entry and click "Edit" to modify
-- **Delete**: Select an entry and click "Delete" to remove
-- **Refresh**: Click "Refresh" to update the display
+- **View**: All passwords are displayed in the main table.
+- **Copy**: Click the clipboard icon (📋) next to the Website, Username, Email, or Password fields to copy their value to the clipboard.
+- **Edit**: Click the pencil icon (✎) next to the Website, Username, Email, or Password fields to edit them directly in the table. Press `Enter` to save changes.
+- **Delete**: Select an entry and click "Delete" to remove it without a confirmation prompt.
+- **Search & Filter**: Use the search bar and filter dropdown to find specific entries.
+- **Refresh**: Click "Refresh" to update the display.
 
 ### Security Options
-- **Master Password Reset**: Delete all data and start fresh
-- **Data Wipe**: Complete removal of all stored information
+- **Master Password Reset**: Delete all data and start fresh.
+- **Data Wipe**: Complete removal of all stored information.
 
 ## File Structure
 
@@ -109,7 +119,7 @@ python guiInterface.py
 └── README.md              # This file
 ```
 
-## Security Considerations
+### Security Considerations
 
 ### Strengths
 - **Offline Operation**: No internet-based vulnerabilities
@@ -129,16 +139,6 @@ python guiInterface.py
 - **Single User**: Designed for individual use
 
 ## Technical Details
-
-### Password Strength Analysis
-The application evaluates password strength based on:
-- Length (8+ characters recommended)
-- Uppercase letters
-- Lowercase letters
-- Numbers
-- Special characters
-
-Strength levels: Weak, Fair, Strong, Very Strong
 
 ### Encryption Process
 1. Master password hashed with SHA-256
