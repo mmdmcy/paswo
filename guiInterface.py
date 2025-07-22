@@ -1,1070 +1,835 @@
-from tkinter import Tk, Frame, Label, Entry, Button, Checkbutton, IntVar, END, Listbox, Scrollbar, VERTICAL, RIGHT, Y, LEFT, BOTH, messagebox, ttk, StringVar, Toplevel, X, Menu, TOP
+from tkinter import Tk, Frame, Label, Entry, Button, Checkbutton, IntVar, END, Listbox, Scrollbar, VERTICAL, RIGHT, Y, LEFT, BOTH, messagebox
 from encryption import hashText
 from fileHandler import savePasswordsToFile, loadPasswordsFromFile
 from passwordGenerator import generatePasswordString
 
-class PasswordManager:
-    def __init__(self):
-        self.window = Tk()
-        self.window.title("Paswo - Password Manager")
-        self.window.geometry("1400x800")
-        
-        # Initialize variables
-        self.current_master_password = None
-        self.is_dark_mode = IntVar(value=1) # 0 for light, 1 for dark
-        self.light_theme = {
-            "bg": "#F0F0F0", "fg": "#333333", "entry_bg": "white",
-            "button_bg": "lightgray", "button_fg": "black", "frame_bg": "#E0E0E0",
-            "tree_bg": "white", "tree_fg": "black", "tree_select_bg": "#0078D7",
-            "tree_select_fg": "white", "tree_heading_bg": "#DDDDDD", "tree_heading_fg": "black"
-        }
-        self.dark_theme = {
-            "bg": "#2E2E2E", "fg": "#E0E0E0", "entry_bg": "#3E3E3E",
-            "button_bg": "#505050", "button_fg": "#E0E0E0", "frame_bg": "#3A3A3A",
-            "tree_bg": "#3E3E3E", "tree_fg": "#E0E0E0", "tree_select_bg": "#0056B3",
-            "tree_select_fg": "white", "tree_heading_bg": "#4A4A4A", "tree_heading_fg": "#E0E0E0"
-        }
-        self.current_theme = self.dark_theme
+# function to check if file exists
+def checkIfFileExists(fileNameString):
+    print(f"checking if file exists: {fileNameString}")  # debug for file
+    try:
+        fileHandle = open(fileNameString, 'r')
+        fileHandle.close()
+        return True
+    except:
+        return False
 
-        self.themed_widgets = [] # List to hold widgets for theme application
-
-        self.initialize_variables()
-        self.create_frames()
-        self.create_login_ui()
-        self.create_main_ui()
-        self.apply_theme() # apply initial theme
-        
-        # Show initial screen
-        if not self.check_if_master_password_exists():
-            self.show_create_password_screen()
-        else:
-            self.show_login_screen()
-    
-    def initialize_variables(self):
-        # Special character variables
-        self.special_chars = {
-            'exclamation': IntVar(value=1),
-            'dollar': IntVar(value=1),
-            'hash': IntVar(value=1),
-            'question': IntVar(value=1),
-            'at': IntVar(value=1),
-            'ampersand': IntVar(value=1),
-            'asterisk': IntVar(value=1),
-            'caret': IntVar(value=1),
-            'euro': IntVar(value=1),
-            'percent': IntVar(value=1),
-            'plus': IntVar(value=1)
-        }
-        
-        # Other settings
-        self.uppercase_var = IntVar(value=1)
-        self.dashes_var = IntVar(value=0)
-        self.exclude_similar_var = IntVar(value=0)
-        self.length_var = StringVar(value="12")
-        self.dash_spacing_var = StringVar(value="4")
-        
-        # Complexity requirements
-        self.require_upper_var = IntVar(value=1)
-        self.require_digits_var = IntVar(value=1)
-        self.require_special_var = IntVar(value=1)
-        self.min_upper_var = StringVar(value="2")
-        self.min_digits_var = StringVar(value="2")
-        self.min_special_var = StringVar(value="2")
-        
-        # Additional requirements
-        self.required_text_var = StringVar(value="")
-        self.exclude_chars_var = StringVar(value="")
-        
-        # Search variables
-        self.search_filter_var = StringVar(value="All")
-    
-    def add_themed_widget(self, widget, widget_type):
-        self.themed_widgets.append({"widget": widget, "type": widget_type})
-
-    def create_frames(self):
-        # Create main frames
-        self.login_frame = Frame(self.window)
-        self.add_themed_widget(self.login_frame, "frame")
-        self.create_password_frame = Frame(self.window)
-        self.add_themed_widget(self.create_password_frame, "frame")
-        
-        # Create main UI frames
-        self.main_frame = Frame(self.window)
-        self.add_themed_widget(self.main_frame, "frame")
-        self.left_frame = Frame(self.main_frame, width=450, padx=10, pady=10)
-        self.add_themed_widget(self.left_frame, "frame")
-        self.right_frame = Frame(self.main_frame, padx=10, pady=10)
-        self.add_themed_widget(self.right_frame, "frame")
-        
-        # These frames will be packed when their respective screens are shown, not here.
-
-    def create_login_ui(self):
-        # Login screen
-        self.login_label = Label(self.login_frame, text="Master password:")
-        self.add_themed_widget(self.login_label, "label")
-        
-        self.login_entry = Entry(self.login_frame, show="*")
-        self.add_themed_widget(self.login_entry, "entry")
-        
-        self.login_button = Button(self.login_frame, text="Login", command=self.check_master_password,
-               font=("Arial", 11, "bold"), bg="lightgreen")
-        self.add_themed_widget(self.login_button, "button")
-        
-        self.delete_master_button = Button(self.login_frame, text="Reset All Data", command=self.reset_all_data,
-               font=("Arial", 10, "bold"), bg="lightcoral")
-        self.add_themed_widget(self.delete_master_button, "button")
-        
-        # Create password screen
-        self.create_label = Label(self.create_password_frame, text="Create new master password:")
-        self.add_themed_widget(self.create_label, "label")
-        
-        self.create_entry = Entry(self.create_password_frame, show="*")
-        self.add_themed_widget(self.create_entry, "entry")
-        
-        self.confirm_label = Label(self.create_password_frame, text="Confirm master password:")
-        self.add_themed_widget(self.confirm_label, "label")
-        
-        self.confirm_entry = Entry(self.create_password_frame, show="*")
-        self.add_themed_widget(self.confirm_entry, "entry")
-        
-        self.hint_label = Label(self.create_password_frame, text="Password hint (required):")
-        self.add_themed_widget(self.hint_label, "label")
-        
-        self.hint_entry = Entry(self.create_password_frame)
-        self.add_themed_widget(self.hint_entry, "entry")
-        
-        self.create_button = Button(self.create_password_frame, text="Create", command=self.create_master_password,
-               font=("Arial", 11, "bold"), bg="lightblue")
-        self.add_themed_widget(self.create_button, "button")
-    
-    def create_main_ui(self):
-        # Dark mode toggle (this is directly on self.window)
-        self.dark_mode_frame_instance = Frame(self.window)
-        self.add_themed_widget(self.dark_mode_frame_instance, "frame")
-        dark_mode_check = Checkbutton(self.dark_mode_frame_instance, text="Dark Mode", variable=self.is_dark_mode, command=self.toggle_dark_mode)
-        self.add_themed_widget(dark_mode_check, "checkbutton")
-        
-        # Left side - Website info
-        self.website_frame = Frame(self.left_frame, relief="solid", bd=1, padx=10, pady=10)
-        self.add_themed_widget(self.website_frame, "frame")
-        
-        self.website_info_label = Label(self.website_frame, text="Website Information", font=("Arial", 12, "bold"))
-        self.add_themed_widget(self.website_info_label, "label")
-        
-        self.website_name_label = Label(self.website_frame, text="Website name:")
-        self.add_themed_widget(self.website_name_label, "label")
-        self.website_entry = Entry(self.website_frame, width=30)
-        self.add_themed_widget(self.website_entry, "entry")
-        
-        self.username_label = Label(self.website_frame, text="Username:")
-        self.add_themed_widget(self.username_label, "label")
-        self.username_entry = Entry(self.website_frame, width=30)
-        self.add_themed_widget(self.username_entry, "entry")
-        
-        self.email_label = Label(self.website_frame, text="Email:")
-        self.add_themed_widget(self.email_label, "label")
-        self.email_entry = Entry(self.website_frame, width=30)
-        self.add_themed_widget(self.email_entry, "entry")
-        
-        # Password section
-        self.password_frame = Frame(self.left_frame, relief="solid", bd=1, padx=10, pady=10)
-        self.add_themed_widget(self.password_frame, "frame")
-        
-        self.generated_password_label = Label(self.password_frame, text="Generated Password", font=("Arial", 12, "bold"))
-        self.add_themed_widget(self.generated_password_label, "label")
-        self.password_label = Label(self.password_frame, text="Password:")
-        self.add_themed_widget(self.password_label, "label")
-        self.password_entry = Entry(self.password_frame, width=30)
-        self.add_themed_widget(self.password_entry, "entry")
-        
-        # Password generation controls
-        self.controls_frame = Frame(self.password_frame)
-        self.add_themed_widget(self.controls_frame, "frame")
-        
-        self.generate_button = Button(self.controls_frame, text="Generate", command=self.generate_password,
-               font=("Arial", 11, "bold"), bg="lightblue")
-        self.add_themed_widget(self.generate_button, "button")
-        
-        # Advanced options button and frame
-        self.advanced_button = Button(self.controls_frame, text="Advanced...", command=self.toggle_advanced_options)
-        self.add_themed_widget(self.advanced_button, "button")
-        
-        # Advanced options frame
-        self.advanced_frame = Frame(self.left_frame, relief="solid", bd=1, padx=10, pady=10)
-        self.add_themed_widget(self.advanced_frame, "frame")
-        
-        # Special Characters Section
-        self.special_chars_frame = Frame(self.advanced_frame)
-        self.add_themed_widget(self.special_chars_frame, "frame")
-        
-        self.special_header_frame = Frame(self.special_chars_frame)
-        self.add_themed_widget(self.special_header_frame, "frame")
-        self.special_chars_label = Label(self.special_header_frame, text="Special chars:", font=("Arial", 10, "bold"))
-        self.add_themed_widget(self.special_chars_label, "label")
-        self.toggle_all_button = Button(self.special_header_frame, text="Toggle All", command=self.toggle_all_special)
-        self.add_themed_widget(self.toggle_all_button, "button")
-        
-        special_chars_data = [
-            ("!", 'exclamation'), ("$", 'dollar'), ("#", 'hash'), ("?", 'question'),
-            ("@", 'at'), ("&", 'ampersand'), ("*", 'asterisk'), ("^", 'caret'),
-            ("€", 'euro'), ("%", 'percent'), ("+", 'plus')
-        ]
-        
-        self.special_char_rows = []
-        for i in range(0, len(special_chars_data), 5):
-            row = Frame(self.special_chars_frame)
-            self.add_themed_widget(row, "frame")
-            self.special_char_rows.append(row)
-            for char, var_name in special_chars_data[i:i+5]:
-                checkbutton = Checkbutton(row, text=char, variable=self.special_chars[var_name])
-                self.add_themed_widget(checkbutton, "checkbutton")
-        
-        # Complexity Requirements
-        self.complexity_frame = Frame(self.advanced_frame)
-        self.add_themed_widget(self.complexity_frame, "frame")
-        self.complexity_rules_label = Label(self.complexity_frame, text="Complexity Rules:", font=("Arial", 10, "bold"))
-        self.add_themed_widget(self.complexity_rules_label, "label")
-        
-        # Length and spacing
-        self.length_frame = Frame(self.complexity_frame)
-        self.add_themed_widget(self.length_frame, "frame")
-        self.length_label = Label(self.length_frame, text="Length:")
-        self.add_themed_widget(self.length_label, "label")
-        self.length_entry = Entry(self.length_frame, textvariable=self.length_var, width=4)
-        self.add_themed_widget(self.length_entry, "entry")
-        
-        # Dashes
-        self.dash_frame = Frame(self.complexity_frame)
-        self.add_themed_widget(self.dash_frame, "frame")
-        self.add_dashes_check = Checkbutton(self.dash_frame, text="Add dashes every", variable=self.dashes_var)
-        self.add_themed_widget(self.add_dashes_check, "checkbutton")
-        self.dash_spacing_entry = Entry(self.dash_frame, textvariable=self.dash_spacing_var, width=2)
-        self.add_themed_widget(self.dash_spacing_entry, "entry")
-        self.chars_label = Label(self.dash_frame, text="chars")
-        self.add_themed_widget(self.chars_label, "label")
-        
-        # Upper/digits/special requirements
-        self.complexity_rows = []
-        for (text, req_var, min_var) in [
-            ("uppercase", self.require_upper_var, self.min_upper_var),
-            ("digits", self.require_digits_var, self.min_digits_var),
-            ("special chars", self.require_special_var, self.min_special_var)
-        ]:
-            frame = Frame(self.complexity_frame)
-            self.add_themed_widget(frame, "frame")
-            self.complexity_rows.append(frame)
-            require_check = Checkbutton(frame, text="Require", variable=req_var)
-            self.add_themed_widget(require_check, "checkbutton")
-            min_entry = Entry(frame, textvariable=min_var, width=2)
-            self.add_themed_widget(min_entry, "entry")
-            or_more_label = Label(frame, text=f"or more {text}")
-            self.add_themed_widget(or_more_label, "label")
-        
-        # Other options
-        self.other_options_frame = Frame(self.advanced_frame)
-        self.add_themed_widget(self.other_options_frame, "frame")
-        self.uppercase_check = Checkbutton(self.other_options_frame, text="Uppercase", variable=self.uppercase_var)
-        self.add_themed_widget(self.uppercase_check, "checkbutton")
-        self.exclude_similar_check = Checkbutton(self.other_options_frame, text="Exclude similar chars (I,l,1,O,0)", 
-                   variable=self.exclude_similar_var)
-        self.add_themed_widget(self.exclude_similar_check, "checkbutton")
-        
-        # Required/Excluded text
-        self.required_text_frame = Frame(self.advanced_frame)
-        self.add_themed_widget(self.required_text_frame, "frame")
-        self.required_text_label = Label(self.required_text_frame, text="Required text:")
-        self.add_themed_widget(self.required_text_label, "label")
-        self.required_text_entry = Entry(self.required_text_frame, textvariable=self.required_text_var)
-        self.add_themed_widget(self.required_text_entry, "entry")
-        
-        self.exclude_chars_frame = Frame(self.advanced_frame)
-        self.add_themed_widget(self.exclude_chars_frame, "frame")
-        self.exclude_chars_label = Label(self.exclude_chars_frame, text="Exclude chars:")
-        self.add_themed_widget(self.exclude_chars_label, "label")
-        self.exclude_chars_entry = Entry(self.exclude_chars_frame, textvariable=self.exclude_chars_var)
-        self.add_themed_widget(self.exclude_chars_entry, "entry")
-        
-        # Add button
-        self.add_entry_button = Button(self.left_frame, text="Add Entry", command=self.add_password,
-               font=("Arial", 11, "bold"), bg="lightgreen")
-        self.add_themed_widget(self.add_entry_button, "button")
-        
-        # Right side - Password list
-        self.saved_passwords_label = Label(self.right_frame, text="Saved Passwords:", font=("Arial", 12, "bold"))
-        self.add_themed_widget(self.saved_passwords_label, "label")
-        
-        # Search
-        self.search_frame = Frame(self.right_frame)
-        self.add_themed_widget(self.search_frame, "frame")
-        self.search_label = Label(self.search_frame, text="Search:")
-        self.add_themed_widget(self.search_label, "label")
-        self.search_entry = Entry(self.search_frame)
-        self.add_themed_widget(self.search_entry, "entry")
-        self.search_filter_combo = ttk.Combobox(self.search_frame, textvariable=self.search_filter_var,
-                    values=["All", "Website", "Username", "Email"],
-                    state="readonly", width=10)
-        self.add_themed_widget(self.search_filter_combo, "ttk_widget")
-        self.search_button = Button(self.search_frame, text="Search", command=self.search_passwords)
-        self.add_themed_widget(self.search_button, "button")
-        
-        # Password list
-        self.list_frame = Frame(self.right_frame)
-        self.add_themed_widget(self.list_frame, "frame")
-        
-        self.password_tree = ttk.Treeview(self.list_frame,
-                                        columns=('website', 'username', 'email', 'password', 'copy_user', 'copy_email', 'copy_pass', 'copy_website_col', 'edit_user', 'edit_email', 'edit_pass', 'edit_website'),
-                                        show='headings')
-        self.add_themed_widget(self.password_tree, "ttk_widget")
-        
-        # Scrollbars
-        self.vsb = ttk.Scrollbar(self.list_frame, orient="vertical", command=self.password_tree.yview)
-        self.add_themed_widget(self.vsb, "ttk_widget")
-        self.hsb = ttk.Scrollbar(self.list_frame, orient="horizontal", command=self.password_tree.xview)
-        self.add_themed_widget(self.hsb, "ttk_widget")
-        self.password_tree.configure(yscrollcommand=self.vsb.set, xscrollcommand=self.hsb.set)
-        
-        # Configure columns
-        self.password_tree.heading('website', text='Website', command=lambda: self.sort_treeview('website'))
-        self.password_tree.heading('username', text='Username', command=lambda: self.sort_treeview('username'))
-        self.password_tree.heading('email', text='Email', command=lambda: self.sort_treeview('email'))
-        self.password_tree.heading('password', text='Password')
-        self.password_tree.heading('copy_user', text='')
-        self.password_tree.heading('copy_email', text='')
-        self.password_tree.heading('copy_pass', text='')
-        self.password_tree.heading('copy_website_col', text='') # new copy website column
-        self.password_tree.heading('edit_user', text='') # new column
-        self.password_tree.heading('edit_email', text='') # new column
-        self.password_tree.heading('edit_pass', text='') # new column
-        self.password_tree.heading('edit_website', text='') # new column
-        
-        self.password_tree.column('website', width=200, minwidth=150)
-        self.password_tree.column('username', width=150, minwidth=100)
-        self.password_tree.column('email', width=200, minwidth=150)
-        self.password_tree.column('password', width=100, minwidth=80)
-        self.password_tree.column('copy_user', width=30, minwidth=30, anchor='center')
-        self.password_tree.column('copy_email', width=30, minwidth=30, anchor='center')
-        self.password_tree.column('copy_pass', width=30, minwidth=30, anchor='center')
-        self.password_tree.column('copy_website_col', width=30, minwidth=30, anchor='center') # new copy website column
-        self.password_tree.column('edit_user', width=30, minwidth=30, anchor='center') # new column
-        self.password_tree.column('edit_email', width=30, minwidth=30, anchor='center') # new column
-        self.password_tree.column('edit_pass', width=30, minwidth=30, anchor='center') # new column
-        self.password_tree.column('edit_website', width=30, minwidth=30, anchor='center') # new column
-        
-        # Buttons
-        self.button_frame = Frame(self.right_frame)
-        self.add_themed_widget(self.button_frame, "frame")
-        self.delete_button = Button(self.button_frame, text="Delete", command=self.delete_password,
-               font=("Arial", 10, "bold"), bg="lightcoral")
-        self.add_themed_widget(self.delete_button, "button")
-        self.refresh_button = Button(self.button_frame, text="Refresh", command=self.refresh_passwords,
-               font=("Arial", 10, "bold"), bg="lightgray")
-        self.add_themed_widget(self.refresh_button, "button")
-        
-        # Context menu
-        self.context_menu = Menu(self.password_tree, tearoff=0)
-        self.context_menu.add_command(label="Copy Username", command=lambda: self.copy_value('username'))
-        self.context_menu.add_command(label="Copy Email", command=lambda: self.copy_value('email'))
-        self.context_menu.add_command(label="Copy Password", command=lambda: self.copy_value('password'))
-        self.context_menu.add_separator()
-        self.context_menu.add_command(label="Delete Entry", command=self.delete_password)
-        
-        # Bind right-click menu
-        self.password_tree.bind("<Button-3>", self.show_context_menu)
-        
-        # Bind click events for copy buttons
-        self.password_tree.bind("<Button-1>", self.handle_click)
-
-    def _pack_main_ui_elements(self):
-        # Pack dark mode toggle (top-level, always visible with main UI)
-        self.dark_mode_frame_instance.pack(side=TOP, anchor="ne", padx=10, pady=5)
-        self.dark_mode_frame_instance.winfo_children()[0].pack(side=RIGHT) # Pack the checkbutton
-
-        # Pack main frames
-        self.main_frame.pack(fill=BOTH, expand=True)
-        self.left_frame.pack(side=LEFT, fill=Y)
-        self.right_frame.pack(side=LEFT, fill=BOTH, expand=True)
-        
-        # Explicitly pack the major sections of the left frame
-        self.website_frame.pack(fill=X, pady=(0, 10))
-        # Pack children of website_frame
-        self.website_info_label.pack(pady=(0, 5))
-        self.website_name_label.pack(anchor="w")
-        self.website_entry.pack(fill=X)
-        self.username_label.pack(anchor="w")
-        self.username_entry.pack(fill=X)
-        self.email_label.pack(anchor="w")
-        self.email_entry.pack(fill=X)
-
-        self.password_frame.pack(fill=X, pady=10)
-        # Pack children of password_frame
-        self.generated_password_label.pack(pady=(0, 5))
-        self.password_label.pack(anchor="w")
-        self.password_entry.pack(fill=X)
-
-        self.controls_frame.pack(fill=X, pady=5) # pack controls frame within password_frame
-        # Pack children of controls_frame
-        self.generate_button.pack(side=LEFT, padx=5)
-        self.advanced_button.pack(side=LEFT)
-
-        self.add_entry_button.pack(fill=X, pady=10) # always visible
-
-        # Pack advanced options frame if it was previously visible
-        if self.advanced_button.cget("text") == "Hide Advanced":
-            self.advanced_frame.pack(pady=10, fill="x")
-            # Pack advanced options sub-elements only if advanced_frame is packed
-            self.special_chars_frame.pack(fill=X, pady=5)
-            self.special_header_frame.pack(fill=X)
-            self.special_chars_label.pack(side=LEFT)
-            self.toggle_all_button.pack(side=LEFT, padx=5)
-            for row in self.special_char_rows:
-                row.pack(fill=X)
-                for checkbutton in row.winfo_children(): checkbutton.pack(side=LEFT)
-
-            self.complexity_frame.pack(fill=X, pady=5)
-            self.complexity_rules_label.pack(anchor="w")
-
-            self.length_frame.pack(fill=X)
-            self.length_label.pack(side=LEFT)
-            self.length_entry.pack(side=LEFT, padx=2)
-
-            self.dash_frame.pack(fill=X)
-            self.add_dashes_check.pack(side=LEFT)
-            self.dash_spacing_entry.pack(side=LEFT, padx=2)
-            self.chars_label.pack(side=LEFT)
-
-            for row in self.complexity_rows:
-                row.pack(fill=X)
-                for widget in row.winfo_children(): widget.pack(side=LEFT)
-
-            self.other_options_frame.pack(fill=X, pady=5)
-            self.uppercase_check.pack(side=LEFT, padx=5)
-            self.exclude_similar_check.pack(side=LEFT)
-
-            self.required_text_frame.pack(fill=X, pady=5)
-            self.required_text_label.pack(side=LEFT)
-            self.required_text_entry.pack(side=LEFT, fill=X, expand=True)
-
-            self.exclude_chars_frame.pack(fill=X, pady=5)
-            self.exclude_chars_label.pack(side=LEFT)
-            self.exclude_chars_entry.pack(side=LEFT, fill=X, expand=True)
-
-        # Explicitly pack the major sections of the right frame
-        self.saved_passwords_label.pack(anchor="w", pady=(0, 10))
-        self.search_frame.pack(fill=X, pady=(0, 10))
-        # Pack children of search_frame
-        self.search_label.pack(side=LEFT)
-        self.search_entry.pack(side=LEFT, fill=X, expand=True, padx=5)
-        self.search_filter_combo.pack(side=LEFT)
-        self.search_button.pack(side=LEFT, padx=5)
-
-        self.list_frame.pack(fill=BOTH, expand=True)
-        # Pack children of list_frame
-        self.password_tree.grid(row=0, column=0, sticky='nsew')
-        self.vsb.grid(row=0, column=1, sticky='ns')
-        self.hsb.grid(row=1, column=0, sticky='ew')
-        self.list_frame.grid_columnconfigure(0, weight=1)
-        self.list_frame.grid_rowconfigure(0, weight=1)
-
-        self.button_frame.pack(fill=X, pady=10)
-        # Pack children of button_frame
-        self.delete_button.pack(side=LEFT, padx=5)
-        self.refresh_button.pack(side=LEFT, padx=5)
-
-    def _forget_main_ui_elements(self):
-        # Unpack dark mode toggle (top-level)
-        self.dark_mode_frame_instance.pack_forget()
-        self.dark_mode_frame_instance.winfo_children()[0].pack_forget() # Unpack the checkbutton
-
-        # Unpack main frames
-        self.main_frame.pack_forget()
-        self.left_frame.pack_forget()
-        self.right_frame.pack_forget()
-        
-        # Unpack all widgets from left_frame
-        self.website_frame.pack_forget()
-        self.website_info_label.pack_forget()
-        self.website_name_label.pack_forget()
-        self.website_entry.pack_forget()
-        self.username_label.pack_forget()
-        self.username_entry.pack_forget()
-        self.email_label.pack_forget()
-        self.email_entry.pack_forget()
-        
-        self.password_frame.pack_forget()
-        self.generated_password_label.pack_forget()
-        self.password_label.pack_forget()
-        self.password_entry.pack_forget()
-        
-        self.controls_frame.pack_forget()
-        self.generate_button.pack_forget()
-        self.advanced_button.pack_forget()
-
-        self.advanced_frame.pack_forget()
-        # self.add_entry_button.pack_forget() # removed, should always be visible
-
-        # Unpack all widgets from right_frame
-        self.saved_passwords_label.pack_forget()
-        self.search_frame.pack_forget()
-        self.search_label.pack_forget()
-        self.search_entry.pack_forget()
-        self.search_filter_combo.pack_forget()
-        self.search_button.pack_forget()
-        self.list_frame.pack_forget()
-        self.password_tree.grid_forget()
-        self.vsb.grid_forget()
-        self.hsb.grid_forget()
-        self.button_frame.pack_forget()
-        self.delete_button.pack_forget()
-        self.refresh_button.pack_forget()
-    
-    def show_login_screen(self):
-        self._forget_main_ui_elements()
-        self.create_password_frame.pack_forget()
-        
-        self.login_frame.pack(pady=20)
-        self.login_label.pack(pady=5)
-        self.login_entry.pack(pady=5)
-        self.login_button.pack(pady=5)
-        self.delete_master_button.pack(pady=5)
-        self.login_entry.delete(0, END)
-        self.login_entry.focus()
-    
-    def show_create_password_screen(self):
-        self._forget_main_ui_elements()
-        self.login_frame.pack_forget()
-        
-        self.create_password_frame.pack(pady=20)
-        self.create_label.pack(pady=5)
-        self.create_entry.pack(pady=5)
-        self.confirm_label.pack(pady=5)
-        self.confirm_entry.pack(pady=5)
-        self.hint_label.pack(pady=5)
-        self.hint_entry.pack(pady=5)
-        self.create_button.pack(pady=5)
-        self.create_entry.focus()
-    
-    def show_main_screen(self):
-        self.login_frame.pack_forget()
-        self.create_password_frame.pack_forget()
-        
-        self._pack_main_ui_elements()
-        self.refresh_passwords()
-        
-        # set focus to the first entry widget in the main ui
-        self.website_entry.focus_set()
-    
-    def check_if_master_password_exists(self):
-        try:
-            with open('master_password.json', 'r') as f:
-                content = f.read().strip()
-                return content != "" and content != "{}" and '"master_password_hash": ""' not in content
-        except:
+# function to check if master password is actually set
+def checkIfMasterPasswordIsSet():
+    print("checking if master password is actually set...")  # debug
+    try:
+        # step 1: check if file exists
+        if not checkIfFileExists('master_password.json'):
+            print("master_password.json does not exist")  # debug
             return False
-    
-    def check_master_password(self):
-        password = self.login_entry.get()
-        stored_hash, hint = self.load_master_password()
         
-        if hashText(password) == stored_hash:
-            self.current_master_password = password
-            self.show_main_screen()
+        # step 2: load the master password
+        hashedPassword = loadMasterPasswordFromFile()
+        
+        # step 3: check if there is a valid hash
+        if hashedPassword is None or hashedPassword == "":
+            print("no valid hash found in master_password.json")  # debug
+            return False
+        
+        print(f"valid hash found: {hashedPassword[:10]}...")  # debug (show only first 10 characters)
+        return True
+    except:
+        print("error checking master password status")  # debug
+        return False
+
+# function to save master password in json format
+def saveMasterPasswordToFile(masterPasswordString):
+    print("hashing and saving master password to json...")  # debug for saving
+    # step 1: hash the master password
+    hashedPasswordString = hashText(masterPasswordString)
+    
+    # step 2: create json string manually
+    jsonString = "{\n"
+    jsonString = jsonString + '  "master_password_hash": "'
+    jsonString = jsonString + hashedPasswordString
+    jsonString = jsonString + '"\n'
+    jsonString = jsonString + "}"
+    
+    # step 3: write to file
+    fileHandle = open('master_password.json', 'w')
+    fileHandle.write(jsonString)
+    fileHandle.close()
+    print("master password saved to master_password.json")  # debug for location
+
+# function to load master password from json format
+def loadMasterPasswordFromFile():
+    print("loading master password from json...")  # debug for loading
+    try:
+        # step 1: check if json file exists
+        if not checkIfFileExists('master_password.json'):
+            return None
+        
+        # step 2: read the file
+        fileHandle = open('master_password.json', 'r')
+        jsonContent = fileHandle.read()
+        fileHandle.close()
+        
+        # step 3: parse json manually
+        cleanContent = jsonContent.strip()
+        
+        # step 4: remove { and }
+        if cleanContent.startswith('{'):
+            cleanContent = cleanContent[1:]
+        if cleanContent.endswith('}'):
+            cleanContent = cleanContent[:-1]
+        
+        # step 5: find the hash value
+        if '"master_password_hash":' in cleanContent:
+            # find first and second quote after the colon
+            colonPosition = cleanContent.find(':')
+            firstQuote = cleanContent.find('"', colonPosition)
+            secondQuote = cleanContent.find('"', firstQuote + 1)
+            
+            if firstQuote != -1 and secondQuote != -1:
+                hashedPassword = cleanContent[firstQuote + 1:secondQuote]
+                return hashedPassword
+        
+        return None
+    except:
+        return None
+
+# function to wipe all data and start over
+def wipeMasterPasswordAndRestart():
+    print("wiping all password data...")  # debug for wiping
+    
+    # step 1: create empty json for master password
+    emptyMasterJson = "{\n"
+    emptyMasterJson = emptyMasterJson + '  "master_password_hash": ""\n'
+    emptyMasterJson = emptyMasterJson + "}"
+    
+    # step 2: write empty master password file
+    try:
+        fileHandle = open('master_password.json', 'w')
+        fileHandle.write(emptyMasterJson)
+        fileHandle.close()
+        print("master_password.json wiped")
+    except:
+        print("error wiping master_password.json")
+    
+    # step 3: create empty json for passwords
+    emptyPasswordsJson = "{}"
+    
+    # step 4: write empty passwords file
+    try:
+        fileHandle = open('passwords.json', 'w')
+        fileHandle.write(emptyPasswordsJson)
+        fileHandle.close()
+        print("passwords.json wiped")
+    except:
+        print("error wiping passwords.json")
+    
+    return True
+
+# function to start gui
+def startGuiApplication():
+    print("starting gui...")  # debug to check if function begins
+    print("creating tkinter window...")  # debug for window creation
+    # create window
+    mainWindow = Tk()
+    print("setting window title...")  # debug after window creation
+    mainWindow.title("Password Manager")
+    mainWindow.geometry("1200x800")  # Reasonable size that fits most screens
+    mainWindow.minsize(1000, 700)  # Set minimum window size
+    
+    # variables
+    print("initializing variables...")  # debug for variables
+    masterPasswordString = ''
+    passwordsDictionary = {}
+    # special character variables
+    exclamationVariable = IntVar(value=1)  # default on
+    dollarVariable = IntVar(value=1)  # default on
+    hashVariable = IntVar(value=1)  # default on
+    questionVariable = IntVar(value=1)  # default on
+    atVariable = IntVar(value=1)  # default on
+    ampersandVariable = IntVar(value=1)  # default on
+    asteriskVariable = IntVar(value=1)  # default on
+    caretVariable = IntVar(value=1)  # default on (^)
+    euroVariable = IntVar(value=1)  # default on (€)
+    percentVariable = IntVar(value=1)  # default on (%)
+    plusVariable = IntVar(value=1)  # default on (+)
+    upperCaseVariable = IntVar(value=1)  # default on    
+    # frame for new master password
+    createPasswordFrame = Frame(mainWindow)
+    createLabel = Label(createPasswordFrame, text="Create new master password:")
+    createEntry = Entry(createPasswordFrame, show="*")
+    confirmLabel = Label(createPasswordFrame, text="Confirm master password:")
+    confirmEntry = Entry(createPasswordFrame, show="*")
+    
+      # frame for login
+    print("creating login frame...")  # debug for login frame
+    loginFrame = Frame(mainWindow)
+    loginLabel = Label(loginFrame, text="Master password:")
+    loginEntry = Entry(loginFrame, show="*")
+    
+    # frame for passwords
+    print("creating main frame...")  # debug for main frame
+    mainFrame = Frame(mainWindow)    
+    # left frame for password generation
+    leftFrame = Frame(mainFrame)
+    leftFrame.config(width=500)  # Compact width
+    
+    # website info frame
+    websiteInfoFrame = Frame(leftFrame)
+    websiteInfoFrame.config(relief="solid", bd=1, padx=10, pady=10)
+    Label(websiteInfoFrame, text="Website Information", font=("Arial", 12, "bold")).pack(pady=(0, 5))
+    
+    siteLabel = Label(websiteInfoFrame, text="Website name:", font=("Arial", 10, "bold"))
+    siteEntry = Entry(websiteInfoFrame, width=30, font=("Arial", 10))
+    
+    usernameLabel = Label(websiteInfoFrame, text="Username:", font=("Arial", 10, "bold"))
+    usernameEntry = Entry(websiteInfoFrame, width=30, font=("Arial", 10))
+    
+    emailLabel = Label(websiteInfoFrame, text="Email address:", font=("Arial", 10, "bold"))
+    emailEntry = Entry(websiteInfoFrame, width=30, font=("Arial", 10))
+    
+    # password info frame
+    passwordInfoFrame = Frame(leftFrame)
+    passwordInfoFrame.config(relief="solid", bd=1, padx=10, pady=10)
+    Label(passwordInfoFrame, text="Generated Password", font=("Arial", 12, "bold")).pack(pady=(0, 5))
+    
+    passwordLabel = Label(passwordInfoFrame, text="Password:", font=("Arial", 10, "bold"))
+    passwordEntry = Entry(passwordInfoFrame, width=30, font=("Arial", 10))
+    strengthLabel = Label(passwordInfoFrame, text="Strength: no password", fg="gray", font=("Arial", 9))
+    
+    # special characters frame - COMPACT DESIGN
+    specialFrame = Frame(leftFrame)
+    specialFrame.config(relief="solid", bd=1, padx=10, pady=10)
+    Label(specialFrame, text="Password Options", font=("Arial", 12, "bold")).pack(pady=(0, 5))
+    
+    # Special characters in compact grid
+    specialCharsFrame = Frame(specialFrame)
+    Label(specialCharsFrame, text="Special chars:", font=("Arial", 10, "bold")).pack(anchor="w")
+    
+    # Row 1 of special characters
+    specialRow1 = Frame(specialCharsFrame)
+    exclamationCheck = Checkbutton(specialRow1, text="!", variable=exclamationVariable, font=("Arial", 9))
+    dollarCheck = Checkbutton(specialRow1, text="$", variable=dollarVariable, font=("Arial", 9))
+    hashCheck = Checkbutton(specialRow1, text="#", variable=hashVariable, font=("Arial", 9))
+    questionCheck = Checkbutton(specialRow1, text="?", variable=questionVariable, font=("Arial", 9))
+    atCheck = Checkbutton(specialRow1, text="@", variable=atVariable, font=("Arial", 9))
+    
+    # Row 2 of special characters
+    specialRow2 = Frame(specialCharsFrame)
+    ampersandCheck = Checkbutton(specialRow2, text="&", variable=ampersandVariable, font=("Arial", 9))
+    asteriskCheck = Checkbutton(specialRow2, text="*", variable=asteriskVariable, font=("Arial", 9))
+    caretCheck = Checkbutton(specialRow2, text="^", variable=caretVariable, font=("Arial", 9))
+    euroCheck = Checkbutton(specialRow2, text="€", variable=euroVariable, font=("Arial", 9))
+    percentCheck = Checkbutton(specialRow2, text="%", variable=percentVariable, font=("Arial", 9))
+    plusCheck = Checkbutton(specialRow2, text="+", variable=plusVariable, font=("Arial", 9))
+    
+    # Other options in compact layout
+    otherOptionsFrame = Frame(specialFrame)
+    upperCaseCheck = Checkbutton(otherOptionsFrame, text="Uppercase", variable=upperCaseVariable, font=("Arial", 10))
+    
+    lengthFrame = Frame(otherOptionsFrame)
+    lengthLabel = Label(lengthFrame, text="Length:", font=("Arial", 10))
+    lengthEntry = Entry(lengthFrame, width=5, font=("Arial", 10))
+    lengthEntry.insert(0, "12")
+    
+    # Required text - COMPACT and VISIBLE
+    requiredFrame = Frame(otherOptionsFrame)
+    requiredTextLabel = Label(requiredFrame, text="Required text:", font=("Arial", 10))
+    requiredTextEntry = Entry(requiredFrame, width=20, font=("Arial", 10), bg="lightyellow")
+    
+    # action buttons frame - COMPACT
+    buttonActionsFrame = Frame(leftFrame)
+    buttonActionsFrame.config(relief="solid", bd=1, padx=10, pady=10)
+    generateButton = Button(buttonActionsFrame, text="Generate Password", font=("Arial", 11, "bold"), bg="lightblue", width=15)
+    addButton = Button(buttonActionsFrame, text="Add to List", font=("Arial", 11, "bold"), bg="lightgreen", width=15)
+    
+    # right frame for password list
+    rightFrame = Frame(mainFrame)
+    listLabel = Label(rightFrame, text="Saved Passwords:", font=("Arial", 12, "bold"))
+    
+    # listbox with scrollbar
+    listFrame = Frame(rightFrame)
+    scrollbar = Scrollbar(listFrame, orient=VERTICAL)
+    passwordListbox = Listbox(listFrame, yscrollcommand=scrollbar.set, height=25, width=60, font=("Arial", 9))
+    scrollbar.config(command=passwordListbox.yview)
+    
+    # buttons for password management
+    buttonFrame = Frame(rightFrame)
+    editButton = Button(buttonFrame, text="Edit", font=("Arial", 10, "bold"), bg="orange", width=8)
+    deleteButton = Button(buttonFrame, text="Delete", font=("Arial", 10, "bold"), bg="lightcoral", width=8)
+    refreshButton = Button(buttonFrame, text="Refresh", font=("Arial", 10, "bold"), bg="lightgray", width=8)
+      # function to create new master password
+    def createNewMasterPassword():
+        nonlocal masterPasswordString, passwordsDictionary
+        print("=== CREATING NEW MASTER PASSWORD ===")  # debug for start
+        
+        # step 1: get passwords
+        password1 = createEntry.get()
+        password2 = confirmEntry.get()
+        print(f"first password: '{password1}'")  # debug for first password
+        print(f"second password: '{password2}'")  # debug for second password
+        print(f"length first password: {len(password1)} characters")  # debug for length
+        print(f"length second password: {len(password2)} characters")  # debug for length
+        
+        # step 2: check if both passwords are filled
+        if not password1:
+            print("ERROR: first password is empty!")  # debug for empty
+            createLabel.config(text="Password cannot be empty:")
+            return
+        
+        if not password2:
+            print("ERROR: second password is empty!")  # debug for empty
+            createLabel.config(text="Confirmation cannot be empty:")
+            return
+        
+        # step 3: check if passwords match
+        if password1 == password2:
+            print("✓ PASSWORDS MATCH!")  # debug for match
+            print("new master password will be saved...")  # debug for saving
+            
+            # step 4: hash the password and show details
+            print(f"password '{password1}' will be hashed with sha-256...")  # debug for hashing
+            hashedPassword = hashText(password1)
+            print(f"hash of new master password: {hashedPassword}")  # debug for hash
+            print(f"hash length: {len(hashedPassword)} characters")  # debug for hash length
+            
+            masterPasswordString = password1
+            saveMasterPasswordToFile(masterPasswordString)
+            print("master password successfully saved to master_password.json")  # debug for success
+            createPasswordFrame.pack_forget()
+            mainFrame.pack(pady=20)
+            updatePasswords()
+            print("=== MASTER PASSWORD CREATED ===")  # debug for end
         else:
-            if hint:
-                pass # messagebox.showinfo("Password Hint", f"Hint: {hint}") # removed
-    
-    def create_master_password(self):
-        password = self.create_entry.get()
-        confirm = self.confirm_entry.get()
-        hint = self.hint_entry.get()
+            print("✗ PASSWORDS DO NOT MATCH!")  # debug for no match
+            print(f"difference: '{password1}' != '{password2}'")  # debug for difference
+            createLabel.config(text="Passwords do not match, try again:")
+
+    # function to check master password
+    def checkMasterPassword():
+        nonlocal masterPasswordString, passwordsDictionary
+        print("=== MASTER PASSWORD CHECK STARTED ===")  # debug for start
         
-        if not password or not confirm:
+        # step 1: get entered password
+        enteredPassword = loginEntry.get()
+        print(f"entered password: '{enteredPassword}'")  # debug for entered password
+        print(f"length entered password: {len(enteredPassword)} characters")  # debug for length
+        
+        # step 2: hash the entered password
+        print("entered password will be hashed with sha-256...")  # debug for hashing
+        hashedEntered = hashText(enteredPassword)
+        print(f"hash of entered password: {hashedEntered}")  # debug for entered hash
+        print(f"length hash entered password: {len(hashedEntered)} characters")  # debug for hash length
+        
+        # step 3: load stored hash from file
+        print("stored hash will be loaded from master_password.json...")  # debug for loading
+        storedHash = loadMasterPasswordFromFile()
+        
+        if storedHash is None:
+            print("ERROR: no stored hash found!")  # debug for no hash
+            loginLabel.config(text="Error loading master password, try again:")
             return
         
-        if not hint:
-            return
+        print(f"stored hash from file: {storedHash}")  # debug for stored hash
+        print(f"length stored hash: {len(storedHash)} characters")  # debug for stored hash length
         
-        if password != confirm:
-            return
+        # step 4: compare the hashes
+        print("comparing hashes...")  # debug for comparing
+        print(f"entered hash: {hashedEntered}")  # debug repeat for comparison
+        print(f"stored hash:  {storedHash}")  # debug repeat for comparison
         
-        self.save_master_password(password, hint)
-        self.show_login_screen()
-    
-    def load_master_password(self):
+        if hashedEntered == storedHash:
+            print("✓ HASHES MATCH - PASSWORD CORRECT!")  # debug for match
+            print("master password accepted, logging in...")  # debug for success
+            masterPasswordString = enteredPassword
+            print("loading passwords from passwords.json...")  # debug for loading passwords
+            passwordsDictionary = loadPasswordsFromFile(masterPasswordString)
+            print(f"number of passwords loaded: {len(passwordsDictionary)}")  # debug for password count
+            loginFrame.pack_forget()
+            mainFrame.pack(pady=20)
+            updatePasswords()
+            print("=== LOGIN SUCCESSFULLY COMPLETED ===")  # debug for end success
+        else:
+            print("✗ HASHES DO NOT MATCH - WRONG PASSWORD!")  # debug for no match
+            print("difference in hashes:")  # debug for difference
+            for i in range(min(len(hashedEntered), len(storedHash))):
+                if hashedEntered[i] != storedHash[i]:
+                    print(f"  - position {i}: entered='{hashedEntered[i]}', stored='{storedHash[i]}'")  # debug for first difference
+                    break
+            loginLabel.config(text="Wrong password, try again:")
+            print("=== LOGIN FAILED ===")  # debug for end fail
+      
+    # function to delete master password and all data
+    def deleteMasterPasswordAndRestart():
+        # ask confirmation
+        import tkinter.messagebox as messagebox
+        if messagebox.askyesno("Confirm", "Are you sure you want to delete the master password and ALL saved passwords?\n\nThis cannot be undone!"):
+            print("deleting master password and data...")  # debug for deletion
+            if wipeMasterPasswordAndRestart():
+                messagebox.showinfo("Completed", "All data has been wiped. The application will restart.")
+                mainWindow.destroy()
+                startGuiApplication()
+            else:
+                messagebox.showerror("Error", "Something went wrong while deleting the files.")
+
+    # function to generate and show password
+    def generateAndShowPassword():
+        print("=== PASSWORD GENERATION STARTED ===")  # debug for start
+        
+        # step 1: get length
+        lengthText = lengthEntry.get()
         try:
-            with open('master_password.json', 'r') as f:
-                import json
-                data = json.load(f)
-                return data.get("master_password_hash"), data.get("hint")
+            passwordLength = int(lengthText)
+            print(f"desired password length: {passwordLength}")  # debug for length
         except:
-            return None, None
-    
-    def save_master_password(self, password, hint):
-        hashed = hashText(password)
-        with open('master_password.json', 'w') as f:
-            import json
-            json.dump({"master_password_hash": hashed, "hint": hint}, f, indent=2)
-    
-    def reset_all_data(self):
-        if messagebox.askyesno("Confirm Reset", "This will delete all saved passwords and reset the master password. Are you sure?"):
-            try:
-                with open('master_password.json', 'w') as f:
-                    f.write('{"master_password_hash": ""}')
-                with open('passwords.json', 'w') as f:
-                    f.write('{}')
-                self.show_create_password_screen()
-            except:
-                pass
-    
-    def generate_password(self):
-        try:
-            length = int(self.length_var.get())
-            # if length < 8:
-            #     messagebox.showwarning("Warning", "Password length should be at least 8 characters")
-            #     return
-            
-            special_chars = ""
-            for char, var in self.special_chars.items():
-                if var.get():
-                    special_chars += {"exclamation": "!", "dollar": "$", "hash": "#",
-                                    "question": "?", "at": "@", "ampersand": "&",
-                                    "asterisk": "*", "caret": "^", "euro": "€",
-                                    "percent": "%", "plus": "+"}[char]
-            
-            # Get complexity requirements
-            min_upper = int(self.min_upper_var.get()) if self.require_upper_var.get() else 0
-            min_digits = int(self.min_digits_var.get()) if self.require_digits_var.get() else 0
-            min_special = int(self.min_special_var.get()) if self.require_special_var.get() else 0
-            
-            password = generatePasswordString(
-                length=length,
-                useUppercase=bool(self.uppercase_var.get()),
-                minUppercase=min_upper,
-                minDigits=min_digits,
-                minSpecial=min_special,
-                specialChars=special_chars,
-                useDashes=bool(self.dashes_var.get()),
-                dashSpacing=int(self.dash_spacing_var.get()) if self.dashes_var.get() else 0,
-                exclude_similar=bool(self.exclude_similar_var.get()),
-                requiredText=self.required_text_var.get(),
-                exclude_chars=self.exclude_chars_var.get()
-            )
-            
-            if password:
-                self.password_entry.delete(0, END)
-                self.password_entry.insert(0, password)
-        except ValueError:
-            pass
-    
-    def add_password(self):
-        website = self.website_entry.get().strip()
-        username = self.username_entry.get().strip()
-        email = self.email_entry.get().strip()
-        password = self.password_entry.get()
+            passwordLength = 8
+            print("no valid length entered, default length 8 used")  # debug for default
         
-        try:
-            passwords = loadPasswordsFromFile(self.current_master_password)
-            passwords[website] = {
-                'username': username,
-                'email': email,
-                'password': password
+        # step 2: get required text
+        requiredText = requiredTextEntry.get()
+        print(f"required text: '{requiredText}'")  # debug for required text
+        print(f"length required text: {len(requiredText)} characters")  # debug for required text length
+        
+        # step 3: check if password is long enough for required text
+        if len(requiredText) > passwordLength:
+            print(f"ERROR: required text ({len(requiredText)} characters) is longer than password ({passwordLength} characters)")
+            passwordLength = len(requiredText) + 5  # make password longer
+            print(f"password length adjusted to: {passwordLength}")
+            
+        # step 4: build special characters string from checkboxes
+        specialCharactersString = ""
+        if exclamationVariable.get():
+            specialCharactersString += "!"
+        if dollarVariable.get():
+            specialCharactersString += "$"
+        if hashVariable.get():
+            specialCharactersString += "#"
+        if questionVariable.get():
+            specialCharactersString += "?"
+        if atVariable.get():
+            specialCharactersString += "@"
+        if ampersandVariable.get():
+            specialCharactersString += "&"
+        if asteriskVariable.get():
+            specialCharactersString += "*"
+        if caretVariable.get():
+            specialCharactersString += "^"
+        if euroVariable.get():
+            specialCharactersString += "€"
+        if percentVariable.get():
+            specialCharactersString += "%"
+        if plusVariable.get():
+            specialCharactersString += "+"
+        
+        print(f"selected special characters: '{specialCharactersString}'")  # debug for special characters
+        print(f"use uppercase: {upperCaseVariable.get()}")  # debug for uppercase
+        
+        # step 5: generate base password
+        remainingLength = passwordLength - len(requiredText)
+        print(f"remaining length for random characters: {remainingLength}")  # debug for remaining length
+        
+        if remainingLength > 0:
+            basePart = generatePasswordString(specialCharactersString, upperCaseVariable.get(), remainingLength)
+            print(f"generated base part: '{basePart}'")  # debug for base part
+        else:
+            basePart = ""
+            print("no room for extra characters")  # debug for no room
+        
+        # step 6: add required text at random position
+        if requiredText:
+            # determine where required text goes
+            import time
+            seedValue = int(time.time() * 1000) % 1000
+            insertPosition = seedValue % (len(basePart) + 1)
+            print(f"required text will be inserted at position: {insertPosition}")  # debug for position
+            
+            # insert required text
+            finalPassword = basePart[:insertPosition] + requiredText + basePart[insertPosition:]
+            print(f"password after adding required text: '{finalPassword}'")  # debug for final
+        else:
+            finalPassword = basePart
+            print("no required text, using base password")  # debug for base only
+        
+        # step 7: show result
+        print(f"final generated password: '{finalPassword}'")  # debug for final
+        print(f"final length: {len(finalPassword)} characters")  # debug for final length
+        passwordEntry.delete(0, END)
+        passwordEntry.insert(0, finalPassword)
+        updatePasswordStrengthIndicator()  # update strength indicator after generation
+        print("=== PASSWORD GENERATION COMPLETED ===")  # debug for end
+    
+    # function to add password
+    def addPassword():
+        siteValue = siteEntry.get()
+        usernameValue = usernameEntry.get()
+        emailValue = emailEntry.get()
+        passwordValue = passwordEntry.get()
+        
+        if siteValue and passwordValue:
+            print("adding password...")  # debug for adding
+            # save as dictionary with all fields
+            passwordsDictionary[siteValue] = {
+                'username': usernameValue,
+                'email': emailValue,
+                'password': passwordValue
             }
-            
-            if savePasswordsToFile(passwords, self.current_master_password):
-                self.refresh_passwords()
-                self.website_entry.delete(0, END)
-                self.username_entry.delete(0, END)
-                self.email_entry.delete(0, END)
-                self.password_entry.delete(0, END)
-            else:
-                pass
-        except Exception as e:
-            pass
+            savePasswordsToFile(passwordsDictionary, masterPasswordString)
+            siteEntry.delete(0, END)
+            usernameEntry.delete(0, END)
+            emailEntry.delete(0, END)
+            passwordEntry.delete(0, END)
+            updatePasswords()
+        else:
+            messagebox.showwarning("Warning", "Website name and password are required!")    
     
-    def sort_treeview(self, col):
-        items = [(self.password_tree.set(item, col), item) for item in self.password_tree.get_children('')]
-        items.sort()
-        for index, (val, item) in enumerate(items):
-            self.password_tree.move(item, '', index)
+    # function to show passwords
+    def updatePasswords():
+        print("updating passwords...")  # debug for update
+        updatePasswordList()
     
-    def show_context_menu(self, event):
-        item = self.password_tree.identify_row(event.y)
-        self.password_tree.selection_set(item)
-        self.context_menu.post(event.x_root, event.y_root)
-    
-    def handle_click(self, event):
-        region = self.password_tree.identify_region(event.x, event.y)
-        if region == "cell":
-            column_id = self.password_tree.identify_column(event.x)
-            item_id = self.password_tree.identify_row(event.y)
-            if column_id == '#5': # copy username column
-                self.copy_value('username', item_id)
-            elif column_id == '#6': # copy email column
-                self.copy_value('email', item_id)
-            elif column_id == '#7': # copy password column
-                self.copy_value('password', item_id)
-            elif column_id == '#8': # copy website column (new dedicated column)
-                self.copy_value('website', item_id)
-            elif column_id == '#9': # edit username column
-                self.start_inline_edit(item_id, 'username')
-            elif column_id == '#10': # edit email column
-                self.start_inline_edit(item_id, 'email')
-            elif column_id == '#11': # edit password column
-                self.start_inline_edit(item_id, 'password')
-            elif column_id == '#12': # edit website column
-                self.start_inline_edit(item_id, 'website')
-
-    def start_inline_edit(self, item_id, field_type):
-        # get current values for the row
-        current_values = self.password_tree.item(item_id, 'values')
-        website = current_values[0]
-        
-        # get the actual, unmasked password data
-        passwords = loadPasswordsFromFile(self.current_master_password)
-        details = passwords.get(website, {})
-
-        # determine which index and actual value to use for editing
-        col_index_map = {'username': 1, 'email': 2, 'password': 3, 'website': 0}
-        treeview_col_index = col_index_map.get(field_type)
-
-        if treeview_col_index is None:
-            print(f"error: invalid field_type for inline edit: {field_type}")
-            return
-
-        # get the actual value for editing (unmasked for password)
-        current_value_for_edit = website_name = current_values[0]
-        if field_type == 'password':
-            current_value_for_edit = details.get(field_type, '')
-        elif field_type == 'username':
-            current_value_for_edit = details.get('username', '')
-        elif field_type == 'email':
-            current_value_for_edit = details.get('email', '')
-        elif field_type == 'website':
-            current_value_for_edit = website_name # website name is the key
-
-        # get column bounding box
-        x, y, width, height = self.password_tree.bbox(item_id, column=f'#{treeview_col_index + 1}')
-
-        # create an entry widget
-        edit_entry = Entry(self.password_tree, 
-                           bg=self.current_theme["entry_bg"], 
-                           fg=self.current_theme["fg"], 
-                           insertbackground=self.current_theme["fg"])
-        edit_entry.place(x=x, y=y, width=width, height=height)
-        edit_entry.insert(0, current_value_for_edit)
-        edit_entry.focus_set()
-
-        def save_inline_edit(event=None):
-            new_value = edit_entry.get()
-            
-            # update the underlying data
-            passwords = loadPasswordsFromFile(self.current_master_password) # reload to get latest
-            
-            # handle website name change (which is the key)
-            if field_type == 'website':
-                if new_value != website: # if website name has changed
-                    # check if new website name already exists
-                    if new_value in passwords:
-                        print(f"error: website '{new_value}' already exists")
-                        edit_entry.destroy()
-                        return
-                    
-                    # create a new entry with the new website name
-                    passwords[new_value] = passwords[website]
-                    del passwords[website] # delete old entry
-                    website = new_value # update website to new value for subsequent operations
-            
-            if website in passwords:
-                # ensure the entry is a dictionary
-                if not isinstance(passwords[website], dict):
-                    # convert old string format to dict if necessary
-                    passwords[website] = {
-                        'username': '',
-                        'email': '',
-                        'password': passwords[website] # put old string into password field
-                    }
-
-                # update the specific field if it's not the website (which was handled above)
-                if field_type != 'website':
-                    passwords[website][field_type] = new_value
-
-                if savePasswordsToFile(passwords, self.current_master_password):
-                    self.refresh_passwords()
-            edit_entry.destroy() # remove the entry widget
-
-        edit_entry.bind("<Return>", save_inline_edit)
-        edit_entry.bind("<FocusOut>", save_inline_edit)
-    
-    def copy_value(self, field_type, item=None):
-        if item is None:
-            item = self.password_tree.selection()[0]
-        
-        values = self.password_tree.item(item)['values']
-        
-        try:
-            if field_type == 'password':
-                # Get actual password from stored data
-                website = values[0]
-                passwords = loadPasswordsFromFile(self.current_master_password)
-                if website in passwords:
-                    value = passwords[website]['password']
-                else:
-                    return
-            else:
-                # Get displayed value
-                idx = {'username': 1, 'email': 2, 'website': 0}.get(field_type, None)
-                if idx is None:
-                    # Fallback for unexpected field_type
-                    return
-                value = values[idx]
-            
-            # Copy to clipboard
-            self.window.clipboard_clear()
-            self.window.clipboard_append(value)
-            
-            # Update copy button icon temporarily
-            col_idx = {'username': 4, 'email': 5, 'password': 6, 'website': 0}.get(field_type)
-            current_values = list(values)
-            current_values[col_idx] = '✓'
-            self.password_tree.item(item, values=tuple(current_values))
-            
-            # Reset icon after 2 seconds
-            self.window.after(2000, lambda: self.reset_copy_icon(item, field_type))
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to copy {field_type}: {str(e)}")
-    
-    def reset_copy_icon(self, item, field_type):
-        try:
-            values = list(self.password_tree.item(item)['values'])
-            col_idx = {'username': 4, 'email': 5, 'password': 6, 'website': 0}.get(field_type)
-            values[col_idx] = '📋'
-            self.password_tree.item(item, values=tuple(values))
-        except:
-            pass
-    
-    def refresh_passwords(self):
-        for item in self.password_tree.get_children():
-            self.password_tree.delete(item)
-        
-        try:
-            passwords = loadPasswordsFromFile(self.current_master_password)
-            for website, details in passwords.items():
-                username = ''
-                email = ''
-                password_display = '••••••••' # default masked password
-                actual_password = ''
-
-                if isinstance(details, dict):
-                    username = details.get('username', '')
-                    email = details.get('email', '')
-                    actual_password = details.get('password', '')
-                else:
-                    # if 'details' is a string, assume it's an old plain password or malformed entry
-                    actual_password = details
-                    password_display = details # display the string itself for debugging malformed entries
-
-                self.password_tree.insert('', 'end', values=(
-                    website,
-                    username,
-                    email,
-                    password_display,
-                    '📋',  # Copy username button
-                    '📋',  # Copy email button
-                    '📋',   # Copy password button
-                    '📋',   # Copy website button
-                    '✎',  # Edit username button
-                    '✎',  # Edit email button
-                    '✎',   # Edit password button
-                    '✎'   # Edit website button
-                ))
-        except Exception as e:
-            pass
-    
-    def search_passwords(self):
-        query = self.search_entry.get().lower()
-        filter_type = self.search_filter_var.get()
-        
-        for item in self.password_tree.get_children():
-            self.password_tree.delete(item)
-        
-        try:
-            passwords = loadPasswordsFromFile(self.current_master_password)
-            for website, details in passwords.items():
-                matches = False
-                if filter_type == "All":
-                    matches = (query in website.lower() or
-                             query in details.get('username', '').lower() or
-                             query in details.get('email', '').lower())
-                elif filter_type == "Website":
-                    matches = query in website.lower()
-                elif filter_type == "Username":
-                    matches = query in details.get('username', '').lower()
-                elif filter_type == "Email":
-                    matches = query in details.get('email', '').lower()
+    # function to update password list
+    def updatePasswordList():
+        passwordListbox.delete(0, END)
+        # sort passwords alphabetically by site name
+        sortedPasswordsList = sorted(passwordsDictionary.items())
+        for siteValue, passwordData in sortedPasswordsList:
+            # check if it's old format (string only) or new format (dictionary)
+            if isinstance(passwordData, dict):
+                username = passwordData.get('username', '')
+                email = passwordData.get('email', '')
+                password = passwordData.get('password', '')
                 
-                if matches:
-                    self.password_tree.insert('', 'end', values=(
-                        website,
-                        details.get('username', ''),
-                        details.get('email', ''),
-                        '••••••••'
-                    ))
-        except Exception as e:
-            # messagebox.showerror("Error", f"Failed to search passwords: {str(e)}") # removed
-            pass
+                # create clear display
+                displayText = f"Website: {siteValue}"
+                if username:
+                    displayText += f" | User: {username}"
+                if email:
+                    displayText += f" | Email: {email}"
+                displayText += f" | Password: {password}"
+            else:
+                # old format support
+                displayText = f"Website: {siteValue} | Password: {passwordData}"
+            
+            passwordListbox.insert(END, displayText)
     
-    def delete_password(self):
-        item = self.password_tree.item(self.password_tree.selection()[0])
-        website = item['values'][0]
-        
-        # if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete the entry for {website}?"): # removed
-        try:
-            passwords = loadPasswordsFromFile(self.current_master_password)
-            if website in passwords:
-                del passwords[website]
-                if savePasswordsToFile(passwords, self.current_master_password):
-                    self.refresh_passwords()
-                    # messagebox.showinfo("Success", "Entry deleted successfully") # removed
+    # function to edit password
+    def editPassword():
+        selectionValue = passwordListbox.curselection()
+        if selectionValue:
+            indexValue = selectionValue[0]
+            selectedItemValue = passwordListbox.get(indexValue)
+            # extract website name from display text
+            siteValue = selectedItemValue.split(" | ")[0].replace("Website: ", "")
+            
+            currentPasswordData = passwordsDictionary[siteValue]
+            
+            # check if it's old or new format
+            if isinstance(currentPasswordData, dict):
+                currentUsername = currentPasswordData.get('username', '')
+                currentEmail = currentPasswordData.get('email', '')
+                currentPassword = currentPasswordData.get('password', '')
+            else:
+                # old format
+                currentUsername = ''
+                currentEmail = ''
+                currentPassword = currentPasswordData
+            
+            # create edit dialog
+            editWindow = Tk()
+            editWindow.title("Edit Password")
+            editWindow.geometry("500x400")
+            
+            Label(editWindow, text=f"Website: {siteValue}", font=("Arial", 12, "bold")).pack(pady=10)
+            
+            # username field
+            Label(editWindow, text="Username:", font=("Arial", 10, "bold")).pack(pady=5)
+            newUsernameEntry = Entry(editWindow, width=50, font=("Arial", 10))
+            newUsernameEntry.insert(0, currentUsername)
+            newUsernameEntry.pack(pady=5)
+            
+            # email field
+            Label(editWindow, text="Email address:", font=("Arial", 10, "bold")).pack(pady=5)
+            newEmailEntry = Entry(editWindow, width=50, font=("Arial", 10))
+            newEmailEntry.insert(0, currentEmail)
+            newEmailEntry.pack(pady=5)
+            
+            # password field
+            Label(editWindow, text="Password:", font=("Arial", 10, "bold")).pack(pady=5)
+            newPasswordEntry = Entry(editWindow, width=50, font=("Arial", 10))
+            newPasswordEntry.insert(0, currentPassword)
+            newPasswordEntry.pack(pady=5)
+            
+            def saveEdit():
+                newUsername = newUsernameEntry.get()
+                newEmail = newEmailEntry.get()
+                newPassword = newPasswordEntry.get()
+                if newPassword:
+                    passwordsDictionary[siteValue] = {
+                        'username': newUsername,
+                        'email': newEmail,
+                        'password': newPassword
+                    }
+                    savePasswordsToFile(passwordsDictionary, masterPasswordString)
+                    updatePasswordList()
+                    editWindow.destroy()
                 else:
-                    # messagebox.showerror("Error", "Failed to delete entry") # removed
-                    pass
-        except Exception as e:
-            # messagebox.showerror("Error", f"Failed to delete password: {str(e)}") # removed
-            pass
-    
-    def toggle_all_special(self):
-        # Use first checkbox as reference
-        new_state = not bool(self.special_chars['exclamation'].get())
-        for var in self.special_chars.values():
-            var.set(new_state)
-
-    def toggle_advanced_options(self):
-        if self.advanced_frame.winfo_ismapped():
-            self.advanced_frame.pack_forget()
-            # unpack all sub-elements of advanced_frame
-            self.special_chars_frame.pack_forget()
-            self.special_header_frame.pack_forget()
-            self.special_chars_label.pack_forget()
-            self.toggle_all_button.pack_forget()
-            for row in self.special_char_rows:
-                row.pack_forget()
-                for checkbutton in row.winfo_children():
-                    checkbutton.pack_forget()
-            self.complexity_frame.pack_forget()
-            self.complexity_rules_label.pack_forget()
-            self.length_frame.pack_forget()
-            self.length_label.pack_forget()
-            self.length_entry.pack_forget()
-            self.dash_frame.pack_forget()
-            self.add_dashes_check.pack_forget()
-            self.dash_spacing_entry.pack_forget()
-            self.chars_label.pack_forget()
-            for row in self.complexity_rows:
-                row.pack_forget()
-                for widget in row.winfo_children():
-                    widget.pack_forget()
-            self.other_options_frame.pack_forget()
-            self.uppercase_check.pack_forget()
-            self.exclude_similar_check.pack_forget()
-            self.required_text_frame.pack_forget()
-            self.required_text_label.pack_forget()
-            self.required_text_entry.pack_forget()
-            self.exclude_chars_frame.pack_forget()
-            self.exclude_chars_label.pack_forget()
-            self.exclude_chars_entry.pack_forget()
-
-            self.advanced_button.config(text="Advanced...")
+                    messagebox.showwarning("Warning", "Password cannot be empty!")
+            
+            Button(editWindow, text="Save", command=saveEdit, font=("Arial", 10, "bold"), bg="lightgreen").pack(pady=10)
+            Button(editWindow, text="Cancel", command=editWindow.destroy, font=("Arial", 10), bg="lightgray").pack(pady=5)
         else:
-            self.advanced_frame.pack(after=self.add_entry_button, pady=10, fill="x") # pack relative to add_entry_button
-            # pack all sub-elements of advanced_frame
-            self.special_chars_frame.pack(fill=X, pady=5)
-            self.special_header_frame.pack(fill=X)
-            self.special_chars_label.pack(side=LEFT)
-            self.toggle_all_button.pack(side=LEFT, padx=5)
-            for row in self.special_char_rows:
-                row.pack(fill=X)
-                for checkbutton in row.winfo_children():
-                    checkbutton.pack(side=LEFT)
-            self.complexity_frame.pack(fill=X, pady=5)
-            self.complexity_rules_label.pack(anchor="w")
-            self.length_frame.pack(fill=X)
-            self.length_label.pack(side=LEFT)
-            self.length_entry.pack(side=LEFT, padx=2)
-            self.dash_frame.pack(fill=X)
-            self.add_dashes_check.pack(side=LEFT)
-            self.dash_spacing_entry.pack(side=LEFT, padx=2)
-            self.chars_label.pack(side=LEFT)
-            for row in self.complexity_rows:
-                row.pack(fill=X)
-                for widget in row.winfo_children():
-                    widget.pack(side=LEFT)
-            self.other_options_frame.pack(fill=X, pady=5)
-            self.uppercase_check.pack(side=LEFT, padx=5)
-            self.exclude_similar_check.pack(side=LEFT)
-            self.required_text_frame.pack(fill=X, pady=5)
-            self.required_text_label.pack(side=LEFT)
-            self.required_text_entry.pack(side=LEFT, fill=X, expand=True)
-            self.exclude_chars_frame.pack(fill=X, pady=5)
-            self.exclude_chars_label.pack(side=LEFT)
-            self.exclude_chars_entry.pack(side=LEFT, fill=X, expand=True)
-
-            self.advanced_button.config(text="Hide Advanced")
+            messagebox.showwarning("Warning", "Select a password to edit first.")
     
-    def apply_theme(self):
-        theme = self.current_theme
-        
-        # Apply to main window
-        self.window.config(bg=theme["bg"])
-        
-        # Apply to all tracked widgets
-        for item in self.themed_widgets:
-            widget = item["widget"]
-            widget_type = item["type"]
-
-            if widget_type == "frame":
-                widget.config(bg=theme["bg"])
-            elif widget_type == "label":
-                widget.config(bg=theme["bg"], fg=theme["fg"])
-            elif widget_type == "entry":
-                widget.config(bg=theme["entry_bg"], fg=theme["fg"], insertbackground=theme["fg"])
-                widget.bind("<Button-1>", lambda event, w=widget: w.focus_set()) # bind click to focus
-            elif widget_type == "button":
-                widget.config(bg=theme["button_bg"], fg=theme["button_fg"])
-            elif widget_type == "checkbutton":
-                widget.config(bg=theme["bg"], fg=theme["fg"], selectcolor=theme["entry_bg"])
-        
-        # Treeview styling
-        style = ttk.Style()
-        style.theme_use("default") # Reset to default to ensure changes apply
-        style.configure("Treeview",
-                        background=theme["tree_bg"],
-                        foreground=theme["tree_fg"],
-                        fieldbackground=theme["tree_bg"],
-                        rowheight=25 # Maintain a reasonable row height
-                       )
-        style.map("Treeview",
-                  background=[('selected', theme["tree_select_bg"])],
-                  foreground=[('selected', theme["tree_select_fg"])])
-        style.configure("Treeview.Heading",
-                        background=theme["tree_heading_bg"],
-                        foreground=theme["tree_heading_fg"],
-                        font=('Arial', 10, 'bold') # Keep font consistent
-                       )
-        
-        # Apply alternating row colors
-        self.password_tree.tag_configure('oddrow', background=theme["tree_bg"])
-        self.password_tree.tag_configure('evenrow', background=theme["frame_bg"])
-    
-    def toggle_dark_mode(self):
-        if self.is_dark_mode.get() == 1:
-            self.current_theme = self.dark_theme
+    # function to delete password
+    def deletePassword():
+        selectionValue = passwordListbox.curselection()
+        if selectionValue:
+            indexValue = selectionValue[0]
+            selectedItemValue = passwordListbox.get(indexValue)
+            # extract website name from display text
+            siteValue = selectedItemValue.split(" | ")[0].replace("Website: ", "")
+            
+            # confirm deletion
+            if messagebox.askyesno("Confirm", f"Are you sure you want to delete all data for '{siteValue}'?"):
+                del passwordsDictionary[siteValue]
+                savePasswordsToFile(passwordsDictionary, masterPasswordString)
+                updatePasswordList()
         else:
-            self.current_theme = self.light_theme
-        self.apply_theme()
+            messagebox.showwarning("Warning", "Select an item to delete first.")
     
-    def run(self):
-        self.window.mainloop()
+    # function to check password strength
+    def checkPasswordStrength(passwordString):
+        print(f"checking password strength for: '{passwordString}'")  # debug for strength
+        
+        # step 1: basic check for length
+        if len(passwordString) == 0:
+            return 0, "no password", "gray"
+        
+        strengthScore = 0
+        strengthText = ""
+        strengthColor = "red"
+        
+        # step 2: check different criteria
+        hasLowerCase = False
+        hasUpperCase = False
+        hasDigits = False
+        hasSpecialChars = False
+        
+        for character in passwordString:
+            if character.islower():
+                hasLowerCase = True
+            elif character.isupper():
+                hasUpperCase = True
+            elif character.isdigit():
+                hasDigits = True
+            elif character in "!@#$%^&*()_+-=[]{}|;':\",./<>?€":
+                hasSpecialChars = True
+        
+        # step 3: calculate score based on criteria
+        if len(passwordString) >= 8:
+            strengthScore += 2
+        if len(passwordString) >= 12:
+            strengthScore += 1
+        if hasLowerCase:
+            strengthScore += 1
+        if hasUpperCase:
+            strengthScore += 1
+        if hasDigits:
+            strengthScore += 1
+        if hasSpecialChars:
+            strengthScore += 2
+        
+        # step 4: determine strength level
+        if strengthScore >= 7:
+            strengthText = "very strong"
+            strengthColor = "green"
+        elif strengthScore >= 5:
+            strengthText = "strong"
+            strengthColor = "orange"
+        elif strengthScore >= 3:
+            strengthText = "moderate"
+            strengthColor = "yellow"
+        else:
+            strengthText = "weak"
+            strengthColor = "red"
+        
+        print(f"strength score: {strengthScore}, level: {strengthText}")  # debug for score
+        return strengthScore, strengthText, strengthColor
+    
+    # function to update strength indicator
+    def updatePasswordStrengthIndicator():
+        passwordValue = passwordEntry.get()
+        score, text, color = checkPasswordStrength(passwordValue)
+        strengthLabel.config(text=f"Strength: {text}", fg=color)
+        print(f"strength indicator updated: {text} ({color})")  # debug for update
 
-if __name__ == "__main__":
-    app = PasswordManager()
-    app.run()
+    # Now create buttons with proper commands (after functions are defined)
+    createButton = Button(createPasswordFrame, text="Create", font=("Arial", 11, "bold"), bg="lightblue")
+    loginButton = Button(loginFrame, text="Login", font=("Arial", 11, "bold"), bg="lightgreen")
+    deleteMasterButton = Button(loginFrame, text="Wipe All Data", font=("Arial", 10, "bold"), bg="red", fg="white")
+    # Simple button state tracking to prevent double clicks
+    button_enabled = True
+    def disable_buttons_temporarily():
+        nonlocal button_enabled
+        button_enabled = False
+        def reset_button_state():
+            nonlocal button_enabled
+            button_enabled = True
+        mainWindow.after(1000, reset_button_state)
+    
+    def safe_create():
+        nonlocal button_enabled
+        if button_enabled:
+            disable_buttons_temporarily()
+            createNewMasterPassword()
+    
+    def safe_login():
+        nonlocal button_enabled
+        if button_enabled:
+            disable_buttons_temporarily()
+            checkMasterPassword()
+    
+    def safe_delete():
+        nonlocal button_enabled
+        if button_enabled:
+            disable_buttons_temporarily()
+            deleteMasterPasswordAndRestart()
+    
+    def safe_generate():
+        nonlocal button_enabled
+        if button_enabled:
+            disable_buttons_temporarily()
+            generateAndShowPassword()
+    
+    def safe_add():
+        nonlocal button_enabled
+        if button_enabled:
+            disable_buttons_temporarily()
+            addPassword()
+    
+    def safe_edit():
+        nonlocal button_enabled
+        if button_enabled:
+            disable_buttons_temporarily()
+            editPassword()
+    
+    def safe_delete_password():
+        nonlocal button_enabled
+        if button_enabled:
+            disable_buttons_temporarily()
+            deletePassword()
+    
+    def safe_refresh():
+        nonlocal button_enabled
+        if button_enabled:
+            disable_buttons_temporarily()
+            updatePasswordList()
+    
+    # Assign commands
+    createButton.config(command=safe_create)
+    loginButton.config(command=safe_login)
+    deleteMasterButton.config(command=safe_delete)
+    generateButton.config(command=safe_generate)
+    addButton.config(command=safe_add)
+    editButton.config(command=safe_edit)
+    deleteButton.config(command=safe_delete_password)
+    refreshButton.config(command=safe_refresh)    # decide which frame to show
+    if not checkIfMasterPasswordIsSet():
+        print("no valid master password found, show creation screen...")  # debug
+        createLabel.pack(pady=5)
+        createEntry.pack(pady=5)
+        confirmLabel.pack(pady=5)
+        confirmEntry.pack(pady=5)
+        createButton.pack(pady=5)
+        createPasswordFrame.pack(pady=20)
+    else:
+        print("valid master password found, show login screen...")  # debug
+        loginLabel.pack(pady=5)
+        loginEntry.pack(pady=5)
+        loginButton.pack(pady=5)
+        deleteMasterButton.pack(pady=5)
+        loginFrame.pack(pady=20)
+    
+    # pack left frame elements - COMPACT LAYOUT
+    # website info frame
+    siteLabel.pack(pady=2)
+    siteEntry.pack(pady=2)
+    usernameLabel.pack(pady=2)
+    usernameEntry.pack(pady=2)
+    emailLabel.pack(pady=2)
+    emailEntry.pack(pady=2)
+    websiteInfoFrame.pack(pady=5, fill="x")
+    
+    # password info frame
+    passwordLabel.pack(pady=2)
+    passwordEntry.pack(pady=2)
+    strengthLabel.pack(pady=2)
+    passwordInfoFrame.pack(pady=5, fill="x")
+    
+    # pack special characters - COMPACT
+    # Row 1
+    exclamationCheck.pack(side=LEFT, padx=2)
+    dollarCheck.pack(side=LEFT, padx=2)
+    hashCheck.pack(side=LEFT, padx=2)
+    questionCheck.pack(side=LEFT, padx=2)
+    atCheck.pack(side=LEFT, padx=2)
+    specialRow1.pack(pady=2)
+    
+    # Row 2
+    ampersandCheck.pack(side=LEFT, padx=2)
+    asteriskCheck.pack(side=LEFT, padx=2)
+    caretCheck.pack(side=LEFT, padx=2)
+    euroCheck.pack(side=LEFT, padx=2)
+    percentCheck.pack(side=LEFT, padx=2)
+    plusCheck.pack(side=LEFT, padx=2)
+    specialRow2.pack(pady=2)
+    
+    specialCharsFrame.pack(pady=3, fill="x")
+    
+    # Other options
+    upperCaseCheck.pack(side=LEFT, padx=5)
+    lengthFrame.pack(side=LEFT, padx=5)
+    lengthLabel.pack(side=LEFT)
+    lengthEntry.pack(side=LEFT)
+    otherOptionsFrame.pack(pady=5, fill="x")
+    
+    requiredFrame.pack(pady=5, fill="x")
+    requiredTextLabel.pack(side=LEFT)
+    requiredTextEntry.pack(side=LEFT, expand=True, fill="x")
+    
+    specialFrame.pack(pady=5, fill="x")
+    
+    # action buttons frame
+    generateButton.pack(side=LEFT, padx=10, expand=True, fill="x")
+    addButton.pack(side=LEFT, padx=10, expand=True, fill="x")
+    buttonActionsFrame.pack(pady=5, fill="x")
+    
+    # pack right frame elements
+    listLabel.pack(pady=5)
+    passwordListbox.pack(side=LEFT, fill=BOTH, expand=True)
+    scrollbar.pack(side=RIGHT, fill=Y)
+    listFrame.pack(fill=BOTH, expand=True, pady=5)
+    
+    editButton.pack(side=LEFT, padx=5)
+    deleteButton.pack(side=LEFT, padx=5)
+    refreshButton.pack(side=LEFT, padx=5)
+    buttonFrame.pack(pady=5)
+    
+    # pack main frames
+    leftFrame.pack(side=LEFT, fill=Y, padx=20, pady=20)
+    rightFrame.pack(side=RIGHT, fill=BOTH, expand=True, padx=20, pady=20)
+    
+    # bind Enter key to login and create buttons for better UX
+    def onEnterPressed(event):
+        if loginFrame.winfo_viewable():
+            checkMasterPassword()
+        elif createPasswordFrame.winfo_viewable():
+            createNewMasterPassword()
+    
+    mainWindow.bind('<Return>', onEnterPressed)
+    
+    # start mainloop
+    print("starting mainloop...")  # debug for mainloop
+    mainWindow.mainloop()
+
+# start the gui
+print("script started...")  # debug to check if script begins
+startGuiApplication()
