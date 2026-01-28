@@ -155,6 +155,40 @@ The encryption algorithm has been tested for:
 - **Security Comparison**: Benchmarked against AES principles
 - **Brute Force Resistance**: Attack simulation testing
 
+## Technical Architecture & Engineering Highlights
+
+This project demonstrates a deep understanding of cryptographic principles and software engineering fundamentals by implementing core security features from scratch without relying on external cryptographic libraries.
+
+### 🛠️ Technology Stack
+- **Language**: Python 3.6+ (Strict typing, modular design)
+- **GUI Framework**: Tkinter (Native Python GUI, zero external dependencies)
+- **Architecture**: Modular Monolith (Separation of concerns between UI, Logic, and Data)
+- **Data Persistence**: Encrypted JSON Serialization
+- **Dependencies**: **Zero Runtime Dependencies** (Built entirely with Python Standard Library)
+
+### Key Engineering Strategies
+1.  **Custom Cryptographic Implementation**:
+    - **SHA-256 Hashing**: Implemented a full SHA-256 algorithm from scratch for master password authentication, verifying deep knowledge of bitwise operations and hashing standards.
+    - **Symmetric Encryption Engine**: Designed and implemented a custom AES-inspired encryption protocol featuring:
+        - **Substitution Layers**: Dynamic S-Box generation based on key hashing.
+        - **Transposition**: Key-dependent scrambling of data blocks.
+        - **XOR Feistel-like Structure**: multiple rounds of mixing for diffusion and confusion.
+    - **Entropy Management**: Usage of system time-based seeding for non-deterministic operations.
+
+2.  **Zero-Dependency Architecture**:
+    - The entire application runs on a standard Python installation.
+    - Eliminates supply chain attack vectors associated with third-party NPM/Pip packages.
+    - Ensures maximum portability across Windows, Linux, and macOS.
+
+3.  **Local-First Security Design**:
+    - **Air-Gapped Ready**: No network calls, no telemetry, no cloud sync.
+    - **Memory Safety**: Critical cryptographic operations handle byte-level data explicitly.
+    - **Fail-Safe Defaults**: Application defaults to "deny" (wipes data on failure/reset triggers).
+
+### Test Coverage
+- **Unit Testing**: Comprehensive test suite (`testSuite.py`) verifying the custom crypto algorithms against standard vectors.
+- **Integration Testing**: Automated flows ensuring data integrity through the Encrypt -> Save -> Load -> Decrypt pipeline.
+
 ## Contributing
 
 This is an open-source project. Feel free to:
