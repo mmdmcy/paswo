@@ -1,1 +1,11 @@
-/__pycache__
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# vault files: never commit these (a master-password hash was committed once in 1.0)
+*.json
+vault.json
+passwords.json
+master_password.json
+legacy-backup-*/
