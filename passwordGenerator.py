@@ -1,5 +1,8 @@
-import random
+import secrets
 import string
+
+# os.urandom-backed generator: passwords must not come from the Mersenne Twister
+random = secrets.SystemRandom()
 
 def generatePasswordString(specialChars, useUppercase, length, exclude_similar=False, exclude_chars="", minUppercase=0, minDigits=0, minSpecial=0, useDashes=False, dashSpacing=0, requiredText=""):
     """
@@ -44,12 +47,8 @@ def generatePasswordString(specialChars, useUppercase, length, exclude_similar=F
     if minSpecial > 0 and len(specialChars) >= minSpecial:
         guaranteed_chars.extend(random.sample(specialChars, minSpecial))
 
-    # add required text
-    if requiredText:
-        password_list.extend(list(requiredText))
-
-    # fill the rest of the password length
-    remaining_length = length - len(guaranteed_chars) - len(password_list) # account for required text
+    # fill the rest of the password length (required text is inserted intact below)
+    remaining_length = length - len(guaranteed_chars) - len(requiredText)
     if remaining_length < 0:
         return "error: length too short for requirements and required text"
 
@@ -62,6 +61,11 @@ def generatePasswordString(specialChars, useUppercase, length, exclude_similar=F
     random.shuffle(password_list)
     
     final_password = "".join(password_list)
+
+    # insert the required text in one piece at a random position
+    if requiredText:
+        insert_at = random.randrange(len(final_password) + 1)
+        final_password = final_password[:insert_at] + requiredText + final_password[insert_at:]
 
     # add dashes
     if useDashes and dashSpacing > 0:

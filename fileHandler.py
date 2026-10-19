@@ -1,102 +1,251 @@
+"""Vault file handling for paswo.
+
+The vault is a single file, ``vault.json``, in a per-user directory:
+
+- ``$PASWO_HOME`` if set, otherwise
+- ``%LOCALAPPDATA%\\paswo`` on Windows,
+- ``~/Library/Application Support/paswo`` on macOS,
+- ``$XDG_DATA_HOME/paswo`` or ``~/.local/share/paswo`` elsewhere.
+
+The directory is created with mode 0700 and the vault file with mode 0600.
+Writes go to a temporary file in the same directory and are renamed over the
+vault, so a crash mid-write never leaves a half-written vault behind.
+
+Old paswo 1.0 vaults (``passwords.json`` + ``master_password.json`` next to
+the script, encrypted with the insecure legacy cipher) are detected and can
+be migrated once with migrateLegacyVault(); see legacy_cipher.py.
+"""
+
+import ast
+import hmac
 import json
-import ast # added for literal_eval
-from encryption import encryptText, decryptText
+import os
+import shutil
+import sys
+import time
 
-# function to save passwords in json format as specified
-def savePasswordsToFile(passwordsDictionary, masterPasswordValue):
-    # create a dictionary to store encrypted passwords
-    encrypted_passwords = {}
-    for site_value, password_data in passwordsDictionary.items():
-        # convert password data (dict) to a json string, then encrypt it
-        # print(f"saving site: {site_value}, data: {password_data}") # debug
-        password_data_str = json.dumps(password_data)
-        encrypted_password_value = encryptText(password_data_str, masterPasswordValue)
-        encrypted_passwords[site_value] = encrypted_password_value
-    
-    # write the encrypted dictionary to file as json
-    with open('passwords.json', 'w') as f:
-        json.dump(encrypted_passwords, f, indent=2)
-    return True # indicate success
+from encryption import VaultError, WrongPasswordOrTampered, decryptVault, encryptVault
 
-# function to load passwords from json format
-def loadPasswordsFromFile(masterPasswordValue):
-    # create empty dictionary for passwords
-    passwords_dictionary = {}
-    
-    # try to open file
+VAULT_FILE_NAME = "vault.json"
+LEGACY_PASSWORDS_FILE = "passwords.json"
+LEGACY_MASTER_FILE = "master_password.json"
+
+_IS_WINDOWS = sys.platform.startswith("win")
+
+
+# ---------------------------------------------------------------------------
+# locations
+# ---------------------------------------------------------------------------
+
+def getVaultDirectory():
+    """Directory that holds the vault (not created here)."""
+    custom = os.environ.get("PASWO_HOME")
+    if custom:
+        return os.path.abspath(os.path.expanduser(custom))
+    if _IS_WINDOWS:
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "paswo")
+    if sys.platform == "darwin":
+        return os.path.join(os.path.expanduser("~"), "Library", "Application Support", "paswo")
+    base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "paswo")
+
+
+def ensureVaultDirectory():
+    """Create the vault directory with mode 0700 and return its path."""
+    directory = getVaultDirectory()
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    if not _IS_WINDOWS:
+        os.chmod(directory, 0o700)
+    return directory
+
+
+def getVaultPath():
+    return os.path.join(getVaultDirectory(), VAULT_FILE_NAME)
+
+
+def vaultExists():
+    return os.path.isfile(getVaultPath())
+
+
+# ---------------------------------------------------------------------------
+# reading and writing
+# ---------------------------------------------------------------------------
+
+def _writePrivateFile(path, data):
+    """Write bytes to path atomically with mode 0600."""
+    directory = os.path.dirname(path)
+    tempPath = os.path.join(directory, f".{os.path.basename(path)}.{os.getpid()}.tmp")
+    descriptor = os.open(tempPath, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
-        with open('passwords.json', 'r') as f:
-            encrypted_passwords = json.load(f)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tempPath, path)
+    except BaseException:
+        try:
+            os.unlink(tempPath)
+        except OSError:
+            pass
+        raise
+    if not _IS_WINDOWS:
+        os.chmod(path, 0o600)
+
+
+def savePasswordsToFile(passwordsDictionary, masterPasswordValue):
+    """Encrypt the dictionary with the master password and write the vault."""
+    if not isinstance(passwordsDictionary, dict):
+        raise TypeError("passwordsDictionary must be a dict")
+    ensureVaultDirectory()
+    _writePrivateFile(getVaultPath(), encryptVault(passwordsDictionary, masterPasswordValue))
+    return True
+
+
+def loadPasswordsFromFile(masterPasswordValue):
+    """Read and decrypt the vault.
+
+    Raises FileNotFoundError if there is no vault, WrongPasswordOrTampered
+    if the master password is wrong or the file was modified, and
+    VaultError if the file is not a paswo vault at all.
+    """
+    with open(getVaultPath(), "rb") as handle:
+        vaultBytes = handle.read()
+    return decryptVault(vaultBytes, masterPasswordValue)
+
+
+def wipeVault():
+    """Delete the vault file. Returns True if nothing is left afterwards."""
+    path = getVaultPath()
+    try:
+        os.unlink(path)
     except FileNotFoundError:
-        return passwords_dictionary
-    except json.JSONDecodeError:
-        # if json parsing fails, it might be an empty or malformed file, or old format
-        # try to read as plain text and handle old format if possible
-        try:
-            with open('passwords.json', 'r') as f:
-                content = f.read()
-                if not content.strip(): # handle empty file case after decode error
-                    return passwords_dictionary
-                # for old, custom json format, it was structured like site:encrypted_pass
-                # but the encrypted_pass value itself might be a string representation of a dict
-                # from older versions that used str() instead of json.dumps()
-                # if the JSONDecodeError occurred, it's likely not standard JSON.
-                # for simplicity and safety, if json.load fails, we return empty dict for now
-                # to avoid complex manual parsing of potentially mixed formats.
-                # if persistent old data is expected, more robust parsing is needed here.
-                print("json decode error, returning empty dict. content was:", content) # debug
-                return passwords_dictionary
-        except Exception as e:
-            print(f"error reading file after json decode error: {e}") # debug
-            return passwords_dictionary
+        pass
+    return not os.path.exists(path)
 
-    # go through each encrypted entry
-    for site_value, encrypted_password_value in encrypted_passwords.items():
-        try:
-            # decrypt the password value
-            decrypted_value = decryptText(encrypted_password_value, masterPasswordValue)
-            # print(f"decrypted for {site_value}: {decrypted_value}") # debug
-            
-            # try to parse as new format (dict), fallback to old format (string)
-            parsed_data = decrypted_value
-            for _ in range(10): # try up to 10 unescape/parse attempts
-                if isinstance(parsed_data, dict) and 'password' in parsed_data:
-                    break # successfully parsed as a dict
-                
-                try:
-                    # first, try to load as json directly
-                    new_parsed_data = json.loads(parsed_data)
-                    parsed_data = new_parsed_data
-                except json.JSONDecodeError:
-                    # if json fails, try unescaping and then literal_eval
-                    try:
-                        temp_value = parsed_data.encode().decode('unicode_escape')
-                        # after unescaping, try json again
-                        new_parsed_data = json.loads(temp_value)
-                        parsed_data = new_parsed_data
-                    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
-                        # if json still fails, or unescaping itself causes an error, try literal_eval
-                        try:
-                            # before literal_eval, remove any outer quotes if they exist
-                            if temp_value.startswith(('"', "'")) and temp_value.endswith(('"', "'")):
-                                temp_value = temp_value[1:-1]
-                            new_parsed_data = ast.literal_eval(temp_value)
-                            parsed_data = new_parsed_data
-                        except (ValueError, SyntaxError):
-                            # if all else fails, break the loop and keep the current parsed_data
-                            break
-                except Exception: # catch any other unexpected errors during parsing
-                    break
 
-            if isinstance(parsed_data, dict) and 'password' in parsed_data:
-                passwords_dictionary[site_value] = parsed_data
-            else:
-                # if it's a valid json but not a dict with 'password', or still a string after attempts,
-                # store the original decrypted string or the closest parsed value.
-                passwords_dictionary[site_value] = parsed_data if isinstance(parsed_data, str) else decrypted_value
-        except Exception as e:
-            # print(f"decryption failed for {site_value}: {e}") # debug
-            continue # skip if decryption fails
-    
-    # return the dictionary
-    return passwords_dictionary
+# ---------------------------------------------------------------------------
+# migration from the paswo 1.0 format (legacy cipher, two files in the CWD)
+# ---------------------------------------------------------------------------
+
+def _legacyCandidateDirectories(legacyDirectory=None):
+    if legacyDirectory is not None:
+        return [os.path.abspath(legacyDirectory)]
+    scriptDirectory = os.path.dirname(os.path.abspath(__file__))
+    candidates = [os.getcwd(), scriptDirectory]
+    return list(dict.fromkeys(candidates))
+
+
+def findLegacyVault(legacyDirectory=None):
+    """Return the directory holding an old-format vault, or None."""
+    for directory in _legacyCandidateDirectories(legacyDirectory):
+        passwordsPath = os.path.join(directory, LEGACY_PASSWORDS_FILE)
+        masterPath = os.path.join(directory, LEGACY_MASTER_FILE)
+        if os.path.isfile(passwordsPath) and os.path.isfile(masterPath):
+            if _readLegacyMasterHash(masterPath):
+                return directory
+    return None
+
+
+def legacyVaultExists(legacyDirectory=None):
+    return findLegacyVault(legacyDirectory) is not None
+
+
+def _readLegacyMasterHash(masterPath):
+    try:
+        with open(masterPath, "r", encoding="utf-8") as handle:
+            document = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(document, dict):
+        return None
+    storedHash = document.get("master_password_hash")
+    if not isinstance(storedHash, str) or len(storedHash) != 64:
+        return None
+    return storedHash.lower()
+
+
+def _parseLegacyEntry(decryptedText):
+    """Old entries were json.dumps(dict), str(dict), or a bare password."""
+    value = decryptedText
+    for _ in range(3):
+        if isinstance(value, dict):
+            break
+        if not isinstance(value, str):
+            break
+        try:
+            value = json.loads(value)
+            continue
+        except ValueError:
+            pass
+        try:
+            value = ast.literal_eval(value)
+            continue
+        except (ValueError, SyntaxError):
+            break
+    if isinstance(value, dict) and "password" in value:
+        return {
+            "username": str(value.get("username", "")),
+            "email": str(value.get("email", "")),
+            "password": str(value["password"]),
+        }
+    return decryptedText
+
+
+def migrateLegacyVault(masterPasswordValue, legacyDirectory=None):
+    """One-time migration of an old-format vault to the new format.
+
+    Verifies the master password against the old SHA-256 hash file,
+    decrypts every entry with the legacy cipher, writes a new vault, reads
+    it back to confirm, and finally moves the old files into a
+    ``legacy-backup-<timestamp>`` folder inside the vault directory (mode
+    0700/0600) so they are no longer lying in a working tree. Delete that
+    folder once you are satisfied with the migrated vault; its contents are
+    protected only by the insecure legacy cipher.
+
+    Returns the migrated password dictionary.
+    """
+    from legacy_cipher import decryptText, hashText
+
+    directory = findLegacyVault(legacyDirectory)
+    if directory is None:
+        raise FileNotFoundError("no old-format vault found")
+    if vaultExists():
+        raise VaultError("a new-format vault already exists; refusing to overwrite it")
+
+    masterPath = os.path.join(directory, LEGACY_MASTER_FILE)
+    passwordsPath = os.path.join(directory, LEGACY_PASSWORDS_FILE)
+
+    storedHash = _readLegacyMasterHash(masterPath)
+    if storedHash is None or not hmac.compare_digest(hashText(masterPasswordValue), storedHash):
+        raise WrongPasswordOrTampered("wrong master password for the old vault")
+
+    with open(passwordsPath, "r", encoding="utf-8") as handle:
+        content = handle.read()
+    encryptedEntries = json.loads(content) if content.strip() else {}
+    if not isinstance(encryptedEntries, dict):
+        raise VaultError("old passwords.json has an unexpected structure")
+
+    passwordsDictionary = {}
+    for siteValue, encryptedValue in encryptedEntries.items():
+        if not isinstance(encryptedValue, str):
+            continue
+        try:
+            decryptedText = decryptText(encryptedValue, masterPasswordValue)
+        except (ValueError, IndexError):
+            continue
+        passwordsDictionary[siteValue] = _parseLegacyEntry(decryptedText)
+
+    savePasswordsToFile(passwordsDictionary, masterPasswordValue)
+    readBack = loadPasswordsFromFile(masterPasswordValue)
+    if readBack != passwordsDictionary:
+        raise VaultError("migrated vault did not read back correctly")
+
+    backupDirectory = os.path.join(getVaultDirectory(), f"legacy-backup-{time.strftime('%Y%m%d-%H%M%S')}")
+    os.makedirs(backupDirectory, mode=0o700, exist_ok=True)
+    for sourcePath in (masterPath, passwordsPath):
+        destinationPath = os.path.join(backupDirectory, os.path.basename(sourcePath))
+        shutil.move(sourcePath, destinationPath)
+        if not _IS_WINDOWS:
+            os.chmod(destinationPath, 0o600)
+    return passwordsDictionary

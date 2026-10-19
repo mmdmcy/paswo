@@ -1,128 +1,12 @@
-from tkinter import Tk, Frame, Label, Entry, Button, Checkbutton, IntVar, END, Listbox, Scrollbar, VERTICAL, RIGHT, Y, LEFT, BOTH, messagebox
-from encryption import hashText
-from fileHandler import savePasswordsToFile, loadPasswordsFromFile
+from tkinter import Tk, Toplevel, Frame, Label, Entry, Button, Checkbutton, IntVar, END, Listbox, Scrollbar, VERTICAL, RIGHT, Y, LEFT, BOTH, messagebox
+import secrets
+from encryption import VaultError, WrongPasswordOrTampered
+from fileHandler import (savePasswordsToFile, loadPasswordsFromFile, vaultExists,
+                         legacyVaultExists, migrateLegacyVault, wipeVault, getVaultPath)
 from passwordGenerator import generatePasswordString
 
-# function to check if file exists
-def checkIfFileExists(fileNameString):
-    print(f"checking if file exists: {fileNameString}")  # debug for file
-    try:
-        fileHandle = open(fileNameString, 'r')
-        fileHandle.close()
-        return True
-    except:
-        return False
-
-# function to check if master password is actually set
-def checkIfMasterPasswordIsSet():
-    print("checking if master password is actually set...")  # debug
-    try:
-        # step 1: check if file exists
-        if not checkIfFileExists('master_password.json'):
-            print("master_password.json does not exist")  # debug
-            return False
-        
-        # step 2: load the master password
-        hashedPassword = loadMasterPasswordFromFile()
-        
-        # step 3: check if there is a valid hash
-        if hashedPassword is None or hashedPassword == "":
-            print("no valid hash found in master_password.json")  # debug
-            return False
-        
-        print(f"valid hash found: {hashedPassword[:10]}...")  # debug (show only first 10 characters)
-        return True
-    except:
-        print("error checking master password status")  # debug
-        return False
-
-# function to save master password in json format
-def saveMasterPasswordToFile(masterPasswordString):
-    print("hashing and saving master password to json...")  # debug for saving
-    # step 1: hash the master password
-    hashedPasswordString = hashText(masterPasswordString)
-    
-    # step 2: create json string manually
-    jsonString = "{\n"
-    jsonString = jsonString + '  "master_password_hash": "'
-    jsonString = jsonString + hashedPasswordString
-    jsonString = jsonString + '"\n'
-    jsonString = jsonString + "}"
-    
-    # step 3: write to file
-    fileHandle = open('master_password.json', 'w')
-    fileHandle.write(jsonString)
-    fileHandle.close()
-    print("master password saved to master_password.json")  # debug for location
-
-# function to load master password from json format
-def loadMasterPasswordFromFile():
-    print("loading master password from json...")  # debug for loading
-    try:
-        # step 1: check if json file exists
-        if not checkIfFileExists('master_password.json'):
-            return None
-        
-        # step 2: read the file
-        fileHandle = open('master_password.json', 'r')
-        jsonContent = fileHandle.read()
-        fileHandle.close()
-        
-        # step 3: parse json manually
-        cleanContent = jsonContent.strip()
-        
-        # step 4: remove { and }
-        if cleanContent.startswith('{'):
-            cleanContent = cleanContent[1:]
-        if cleanContent.endswith('}'):
-            cleanContent = cleanContent[:-1]
-        
-        # step 5: find the hash value
-        if '"master_password_hash":' in cleanContent:
-            # find first and second quote after the colon
-            colonPosition = cleanContent.find(':')
-            firstQuote = cleanContent.find('"', colonPosition)
-            secondQuote = cleanContent.find('"', firstQuote + 1)
-            
-            if firstQuote != -1 and secondQuote != -1:
-                hashedPassword = cleanContent[firstQuote + 1:secondQuote]
-                return hashedPassword
-        
-        return None
-    except:
-        return None
-
-# function to wipe all data and start over
-def wipeMasterPasswordAndRestart():
-    print("wiping all password data...")  # debug for wiping
-    
-    # step 1: create empty json for master password
-    emptyMasterJson = "{\n"
-    emptyMasterJson = emptyMasterJson + '  "master_password_hash": ""\n'
-    emptyMasterJson = emptyMasterJson + "}"
-    
-    # step 2: write empty master password file
-    try:
-        fileHandle = open('master_password.json', 'w')
-        fileHandle.write(emptyMasterJson)
-        fileHandle.close()
-        print("master_password.json wiped")
-    except:
-        print("error wiping master_password.json")
-    
-    # step 3: create empty json for passwords
-    emptyPasswordsJson = "{}"
-    
-    # step 4: write empty passwords file
-    try:
-        fileHandle = open('passwords.json', 'w')
-        fileHandle.write(emptyPasswordsJson)
-        fileHandle.close()
-        print("passwords.json wiped")
-    except:
-        print("error wiping passwords.json")
-    
-    return True
+# NOTE: the master password is never written to disk, hashed into a side
+# file, or printed. The only proof of it is that the vault decrypts.
 
 # function to start gui
 def startGuiApplication():
@@ -259,111 +143,86 @@ def startGuiApplication():
       # function to create new master password
     def createNewMasterPassword():
         nonlocal masterPasswordString, passwordsDictionary
-        print("=== CREATING NEW MASTER PASSWORD ===")  # debug for start
         
         # step 1: get passwords
         password1 = createEntry.get()
         password2 = confirmEntry.get()
-        print(f"first password: '{password1}'")  # debug for first password
-        print(f"second password: '{password2}'")  # debug for second password
-        print(f"length first password: {len(password1)} characters")  # debug for length
-        print(f"length second password: {len(password2)} characters")  # debug for length
         
         # step 2: check if both passwords are filled
         if not password1:
-            print("ERROR: first password is empty!")  # debug for empty
             createLabel.config(text="Password cannot be empty:")
             return
         
         if not password2:
-            print("ERROR: second password is empty!")  # debug for empty
             createLabel.config(text="Confirmation cannot be empty:")
             return
         
         # step 3: check if passwords match
-        if password1 == password2:
-            print("✓ PASSWORDS MATCH!")  # debug for match
-            print("new master password will be saved...")  # debug for saving
-            
-            # step 4: hash the password and show details
-            print(f"password '{password1}' will be hashed with sha-256...")  # debug for hashing
-            hashedPassword = hashText(password1)
-            print(f"hash of new master password: {hashedPassword}")  # debug for hash
-            print(f"hash length: {len(hashedPassword)} characters")  # debug for hash length
-            
-            masterPasswordString = password1
-            saveMasterPasswordToFile(masterPasswordString)
-            print("master password successfully saved to master_password.json")  # debug for success
-            createPasswordFrame.pack_forget()
-            mainFrame.pack(pady=20)
-            updatePasswords()
-            print("=== MASTER PASSWORD CREATED ===")  # debug for end
-        else:
-            print("✗ PASSWORDS DO NOT MATCH!")  # debug for no match
-            print(f"difference: '{password1}' != '{password2}'")  # debug for difference
+        if password1 != password2:
             createLabel.config(text="Passwords do not match, try again:")
+            return
+        
+        # step 4: create the (empty) vault; the file itself proves the password later
+        try:
+            savePasswordsToFile({}, password1)
+        except OSError as error:
+            messagebox.showerror("Error", f"Could not create the vault:\n{error}")
+            return
+        masterPasswordString = password1
+        passwordsDictionary = {}
+        createEntry.delete(0, END)
+        confirmEntry.delete(0, END)
+        createPasswordFrame.pack_forget()
+        mainFrame.pack(pady=20)
+        updatePasswords()
 
     # function to check master password
     def checkMasterPassword():
         nonlocal masterPasswordString, passwordsDictionary
-        print("=== MASTER PASSWORD CHECK STARTED ===")  # debug for start
         
         # step 1: get entered password
         enteredPassword = loginEntry.get()
-        print(f"entered password: '{enteredPassword}'")  # debug for entered password
-        print(f"length entered password: {len(enteredPassword)} characters")  # debug for length
-        
-        # step 2: hash the entered password
-        print("entered password will be hashed with sha-256...")  # debug for hashing
-        hashedEntered = hashText(enteredPassword)
-        print(f"hash of entered password: {hashedEntered}")  # debug for entered hash
-        print(f"length hash entered password: {len(hashedEntered)} characters")  # debug for hash length
-        
-        # step 3: load stored hash from file
-        print("stored hash will be loaded from master_password.json...")  # debug for loading
-        storedHash = loadMasterPasswordFromFile()
-        
-        if storedHash is None:
-            print("ERROR: no stored hash found!")  # debug for no hash
-            loginLabel.config(text="Error loading master password, try again:")
+        if not enteredPassword:
+            loginLabel.config(text="Password cannot be empty:")
             return
         
-        print(f"stored hash from file: {storedHash}")  # debug for stored hash
-        print(f"length stored hash: {len(storedHash)} characters")  # debug for stored hash length
-        
-        # step 4: compare the hashes
-        print("comparing hashes...")  # debug for comparing
-        print(f"entered hash: {hashedEntered}")  # debug repeat for comparison
-        print(f"stored hash:  {storedHash}")  # debug repeat for comparison
-        
-        if hashedEntered == storedHash:
-            print("✓ HASHES MATCH - PASSWORD CORRECT!")  # debug for match
-            print("master password accepted, logging in...")  # debug for success
-            masterPasswordString = enteredPassword
-            print("loading passwords from passwords.json...")  # debug for loading passwords
-            passwordsDictionary = loadPasswordsFromFile(masterPasswordString)
-            print(f"number of passwords loaded: {len(passwordsDictionary)}")  # debug for password count
-            loginFrame.pack_forget()
-            mainFrame.pack(pady=20)
-            updatePasswords()
-            print("=== LOGIN SUCCESSFULLY COMPLETED ===")  # debug for end success
-        else:
-            print("✗ HASHES DO NOT MATCH - WRONG PASSWORD!")  # debug for no match
-            print("difference in hashes:")  # debug for difference
-            for i in range(min(len(hashedEntered), len(storedHash))):
-                if hashedEntered[i] != storedHash[i]:
-                    print(f"  - position {i}: entered='{hashedEntered[i]}', stored='{storedHash[i]}'")  # debug for first difference
-                    break
+        # step 2: decrypt the vault; success is the password check
+        try:
+            if vaultExists():
+                loadedPasswords = loadPasswordsFromFile(enteredPassword)
+            else:
+                # old paswo 1.0 files found: migrate them once to the new format
+                loadedPasswords = migrateLegacyVault(enteredPassword)
+                messagebox.showinfo(
+                    "Vault upgraded",
+                    "Your old vault was upgraded to the new encrypted format and is now stored at:\n"
+                    f"{getVaultPath()}\n\n"
+                    "The old files were moved to a legacy-backup folder next to it. "
+                    "They are protected only by the old, weak cipher: delete them once "
+                    "you have checked that all your entries are present.")
+        except WrongPasswordOrTampered:
             loginLabel.config(text="Wrong password, try again:")
-            print("=== LOGIN FAILED ===")  # debug for end fail
+            return
+        except VaultError as error:
+            messagebox.showerror("Vault error", f"The vault could not be read:\n{error}")
+            return
+        except OSError as error:
+            messagebox.showerror("Error", f"Could not open the vault:\n{error}")
+            return
+        
+        masterPasswordString = enteredPassword
+        passwordsDictionary = loadedPasswords
+        loginEntry.delete(0, END)
+        loginFrame.pack_forget()
+        mainFrame.pack(pady=20)
+        updatePasswords()
       
     # function to delete master password and all data
     def deleteMasterPasswordAndRestart():
         # ask confirmation
         import tkinter.messagebox as messagebox
         if messagebox.askyesno("Confirm", "Are you sure you want to delete the master password and ALL saved passwords?\n\nThis cannot be undone!"):
-            print("deleting master password and data...")  # debug for deletion
-            if wipeMasterPasswordAndRestart():
+            if wipeVault():
                 messagebox.showinfo("Completed", "All data has been wiped. The application will restart.")
                 mainWindow.destroy()
                 startGuiApplication()
@@ -372,27 +231,20 @@ def startGuiApplication():
 
     # function to generate and show password
     def generateAndShowPassword():
-        print("=== PASSWORD GENERATION STARTED ===")  # debug for start
         
         # step 1: get length
         lengthText = lengthEntry.get()
         try:
             passwordLength = int(lengthText)
-            print(f"desired password length: {passwordLength}")  # debug for length
         except:
             passwordLength = 8
-            print("no valid length entered, default length 8 used")  # debug for default
         
         # step 2: get required text
         requiredText = requiredTextEntry.get()
-        print(f"required text: '{requiredText}'")  # debug for required text
-        print(f"length required text: {len(requiredText)} characters")  # debug for required text length
         
         # step 3: check if password is long enough for required text
         if len(requiredText) > passwordLength:
-            print(f"ERROR: required text ({len(requiredText)} characters) is longer than password ({passwordLength} characters)")
             passwordLength = len(requiredText) + 5  # make password longer
-            print(f"password length adjusted to: {passwordLength}")
             
         # step 4: build special characters string from checkboxes
         specialCharactersString = ""
@@ -419,42 +271,29 @@ def startGuiApplication():
         if plusVariable.get():
             specialCharactersString += "+"
         
-        print(f"selected special characters: '{specialCharactersString}'")  # debug for special characters
-        print(f"use uppercase: {upperCaseVariable.get()}")  # debug for uppercase
         
         # step 5: generate base password
         remainingLength = passwordLength - len(requiredText)
-        print(f"remaining length for random characters: {remainingLength}")  # debug for remaining length
         
         if remainingLength > 0:
             basePart = generatePasswordString(specialCharactersString, upperCaseVariable.get(), remainingLength)
-            print(f"generated base part: '{basePart}'")  # debug for base part
         else:
             basePart = ""
-            print("no room for extra characters")  # debug for no room
         
         # step 6: add required text at random position
         if requiredText:
             # determine where required text goes
-            import time
-            seedValue = int(time.time() * 1000) % 1000
-            insertPosition = seedValue % (len(basePart) + 1)
-            print(f"required text will be inserted at position: {insertPosition}")  # debug for position
+            insertPosition = secrets.randbelow(len(basePart) + 1)
             
             # insert required text
             finalPassword = basePart[:insertPosition] + requiredText + basePart[insertPosition:]
-            print(f"password after adding required text: '{finalPassword}'")  # debug for final
         else:
             finalPassword = basePart
-            print("no required text, using base password")  # debug for base only
         
         # step 7: show result
-        print(f"final generated password: '{finalPassword}'")  # debug for final
-        print(f"final length: {len(finalPassword)} characters")  # debug for final length
         passwordEntry.delete(0, END)
         passwordEntry.insert(0, finalPassword)
         updatePasswordStrengthIndicator()  # update strength indicator after generation
-        print("=== PASSWORD GENERATION COMPLETED ===")  # debug for end
     
     # function to add password
     def addPassword():
@@ -533,7 +372,7 @@ def startGuiApplication():
                 currentPassword = currentPasswordData
             
             # create edit dialog
-            editWindow = Tk()
+            editWindow = Toplevel(mainWindow)
             editWindow.title("Edit Password")
             editWindow.geometry("500x400")
             
@@ -597,7 +436,6 @@ def startGuiApplication():
     
     # function to check password strength
     def checkPasswordStrength(passwordString):
-        print(f"checking password strength for: '{passwordString}'")  # debug for strength
         
         # step 1: basic check for length
         if len(passwordString) == 0:
@@ -651,7 +489,6 @@ def startGuiApplication():
             strengthText = "weak"
             strengthColor = "red"
         
-        print(f"strength score: {strengthScore}, level: {strengthText}")  # debug for score
         return strengthScore, strengthText, strengthColor
     
     # function to update strength indicator
@@ -659,7 +496,6 @@ def startGuiApplication():
         passwordValue = passwordEntry.get()
         score, text, color = checkPasswordStrength(passwordValue)
         strengthLabel.config(text=f"Strength: {text}", fg=color)
-        print(f"strength indicator updated: {text} ({color})")  # debug for update
 
     # Now create buttons with proper commands (after functions are defined)
     createButton = Button(createPasswordFrame, text="Create", font=("Arial", 11, "bold"), bg="lightblue")
@@ -732,8 +568,7 @@ def startGuiApplication():
     editButton.config(command=safe_edit)
     deleteButton.config(command=safe_delete_password)
     refreshButton.config(command=safe_refresh)    # decide which frame to show
-    if not checkIfMasterPasswordIsSet():
-        print("no valid master password found, show creation screen...")  # debug
+    if not vaultExists() and not legacyVaultExists():
         createLabel.pack(pady=5)
         createEntry.pack(pady=5)
         confirmLabel.pack(pady=5)
@@ -741,7 +576,8 @@ def startGuiApplication():
         createButton.pack(pady=5)
         createPasswordFrame.pack(pady=20)
     else:
-        print("valid master password found, show login screen...")  # debug
+        if not vaultExists():
+            loginLabel.config(text="Old vault found. Enter your master password to upgrade it:")
         loginLabel.pack(pady=5)
         loginEntry.pack(pady=5)
         loginButton.pack(pady=5)
